@@ -4,20 +4,16 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use tree_sitter::{Language, Parser, Point, Query, QueryCursor};
 
-pub fn get_rust_language() -> Language {
-    tree_sitter_rust::language()
-}
-
-pub fn get_parser() -> Parser {
+pub fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
     parser
-        .set_language(get_rust_language())
-        .expect("Error loading Rust grammar");
+        .set_language(language)
+        .expect("Error loading grammar");
     parser
 }
 
-pub fn get_query(source: &str) -> Query {
-    Query::new(get_rust_language(), source).unwrap()
+pub fn get_query(source: &str, language: Language) -> Query {
+    Query::new(language, source).unwrap()
 }
 
 pub struct Result {
@@ -44,11 +40,16 @@ fn format_path(path: &Path) -> String {
         .into_owned()
 }
 
-pub fn get_results(query: &Query, file_path: impl AsRef<Path>, capture_index: u32) -> Vec<Result> {
+pub fn get_results(
+    query: &Query,
+    file_path: impl AsRef<Path>,
+    capture_index: u32,
+    language: Language,
+) -> Vec<Result> {
     let mut query_cursor = QueryCursor::new();
     let file_path = file_path.as_ref();
     let file_text = fs::read_to_string(file_path).unwrap();
-    let tree = get_parser().parse(&file_text, None).unwrap();
+    let tree = get_parser(language).parse(&file_text, None).unwrap();
     query_cursor
         .matches(query, tree.root_node(), file_text.as_bytes())
         .flat_map(|match_| {
