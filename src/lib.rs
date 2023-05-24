@@ -1,3 +1,6 @@
+use clap::Parser;
+use std::fs;
+use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
 
 mod macros;
@@ -5,14 +8,14 @@ mod treesitter;
 
 use treesitter::{get_query, get_results};
 
-pub fn run() {
-    let query_source = r#"
-        (field_declaration
-          type: (type_identifier) @type
-          (#eq? @type "String")
-        )
-    "#;
-    let query = get_query(query_source);
+#[derive(Parser)]
+pub struct Args {
+    pub path_to_query_file: PathBuf,
+}
+
+pub fn run(args: Args) {
+    let query_source = fs::read_to_string(&args.path_to_query_file).unwrap();
+    let query = get_query(&query_source);
     enumerate_project_files()
         .flat_map(|project_file_dir_entry| get_results(&query, project_file_dir_entry.path(), 0))
         .for_each(|result| {
