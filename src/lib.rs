@@ -11,13 +11,25 @@ use treesitter::{get_query, get_results};
 
 #[derive(Parser)]
 pub struct Args {
-    pub path_to_query_file: PathBuf,
+    #[command(flatten)]
+    pub query_args: QueryArgs,
     #[arg(short, long = "capture")]
     pub capture_name: Option<String>,
 }
 
+#[derive(clap::Args)]
+#[group(required = true, multiple = false)]
+pub struct QueryArgs {
+    pub path_to_query_file: Option<PathBuf>,
+    #[arg(short, long)]
+    pub query_source: Option<String>,
+}
+
 pub fn run(args: Args) {
-    let query_source = fs::read_to_string(&args.path_to_query_file).unwrap();
+    let query_source = match args.query_args.path_to_query_file.as_ref() {
+        Some(path_to_query_file) => fs::read_to_string(path_to_query_file).unwrap(),
+        None => args.query_args.query_source.clone().unwrap(),
+    };
     let query = get_query(&query_source);
     let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
         query
