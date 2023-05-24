@@ -1,8 +1,8 @@
 use clap::Parser;
+use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
 use rayon::prelude::*;
 use std::fs;
 use std::path::PathBuf;
-use walkdir::{DirEntry, WalkDir};
 
 mod macros;
 mod treesitter;
@@ -26,7 +26,15 @@ pub fn run(args: Args) {
 }
 
 fn enumerate_project_files() -> Vec<DirEntry> {
-    WalkDir::new(".")
+    WalkBuilder::new(".")
+        .types(
+            TypesBuilder::new()
+                .add_defaults()
+                .select("rust")
+                .build()
+                .unwrap(),
+        )
+        .build()
         .into_iter()
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
