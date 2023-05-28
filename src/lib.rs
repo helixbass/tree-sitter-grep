@@ -1,8 +1,15 @@
 use clap::Parser;
+use grep::matcher::Match;
+use grep::matcher::Matcher;
+use grep::matcher::NoCaptures;
+use grep::matcher::NoError;
+use grep::searcher::Searcher;
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
 use rayon::prelude::*;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 mod language;
 mod macros;
@@ -42,19 +49,20 @@ pub fn run(args: Args) {
             .capture_index_for_name(capture_name)
             .expect(&format!("Unknown capture name: `{}`", capture_name))
     });
+
     enumerate_project_files(&*supported_language)
         .par_iter()
-        .flat_map(|project_file_dir_entry| {
-            get_results(
-                &query,
-                project_file_dir_entry.path(),
-                capture_index,
-                language,
-            )
+        .for_each(|project_file_dir_entry| {
+            let mut printer = grep::printer::Standard::new_no_color(io::stdout());
+            let path = project_file_dir_entry.path();
+            let matches = get_results(&query, path, capture_index, language);
+
+            let matcher = TreeSitterMatcher::new(matches);
+
+            Searcher::new()
+                .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
+                .unwrap();
         })
-        .for_each(|result| {
-            println!("{}", result.format());
-        });
 }
 
 fn enumerate_project_files(language: &dyn SupportedLanguage) -> Vec<DirEntry> {
@@ -71,4 +79,38 @@ fn enumerate_project_files(language: &dyn SupportedLanguage) -> Vec<DirEntry> {
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.metadata().unwrap().is_file())
         .collect()
+}
+#[derive(Debug)]
+struct TreeSitterMatcher {
+    matches: Mutex<Vec<Match>>,
+}
+
+impl TreeSitterMatcher {
+    fn new(mut matches: Vec<Match>) -> Self {
+        matches.sort_by_key(|m| m.start());
+
+        Self {
+            matches: Mutex::new(matches),
+        }
+    }
+}
+
+impl Matcher for TreeSitterMatcher {
+    type Captures = NoCaptures;
+
+    type Error = NoError;
+
+    fn find_at(&self, _haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error> {
+        let _match = self
+            .matches
+            .lock()
+            .unwrap()
+            .pop()
+            .map(|m| Match::new(m.start() - at, m.end() - at));
+        Ok(_match)
+    }
+
+    fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
+        Ok(NoCaptures::new())
+    }
 }
