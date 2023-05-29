@@ -128,7 +128,6 @@ impl Matcher for TreeSitterMatcher<'_> {
         let match_ = matches_info.matches.remove(0);
         Ok(Some(adjust_match(
             match_,
-            at,
             haystack.len(),
             matches_info.text_len,
         )))
@@ -145,13 +144,8 @@ struct PopulatedMatchesInfo {
     text_len: usize,
 }
 
-fn adjust_match(
-    match_: Match,
-    at: usize,
-    haystack_len: usize,
-    total_file_text_len: usize,
-) -> Match {
-    let offset_in_file = total_file_text_len - haystack_len + at;
+fn adjust_match(match_: Match, haystack_len: usize, total_file_text_len: usize) -> Match {
+    let offset_in_file = total_file_text_len - haystack_len;
     Match::new(
         match_.start() - offset_in_file,
         match_.end() - offset_in_file,
