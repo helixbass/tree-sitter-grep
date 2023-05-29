@@ -2,7 +2,7 @@
 members = [
     "tree_sitter_grep",
     "tree_sitter_grep_plugin_core",
-    "filter_after_line_15",
+    "filter_after_line_number",
 ]
 
 [workspace.dependencies]

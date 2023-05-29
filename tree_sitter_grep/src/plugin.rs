@@ -42,7 +42,7 @@ impl tree_sitter_grep_plugin_core::PluginRegistrar for PluginRegistrar {
     }
 }
 
-fn load_plugin(library_path: impl AsRef<OsStr>) -> FiltererProxy {
+fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> FiltererProxy {
     let library = Arc::new(unsafe {
         Library::new(library_path).expect("Couldn't load filter dynamic library")
     });
@@ -63,15 +63,18 @@ fn load_plugin(library_path: impl AsRef<OsStr>) -> FiltererProxy {
     let mut registrar = PluginRegistrar::new(library.clone());
 
     unsafe {
-        (plugin_declaration.register)(&mut registrar);
+        (plugin_declaration.register)(&mut registrar, filter_arg);
     }
 
     registrar.filterer.unwrap()
 }
 
-pub fn get_loaded_filter(filter_library_path: Option<&str>) -> Option<&'static FiltererProxy> {
+pub fn get_loaded_filter(
+    filter_library_path: Option<&str>,
+    filter_arg: Option<&str>,
+) -> Option<&'static FiltererProxy> {
     filter_library_path.map(|filter_library_path| {
         static LOADED_FILTERER: OnceCell<FiltererProxy> = OnceCell::new();
-        LOADED_FILTERER.get_or_init(|| load_plugin(filter_library_path))
+        LOADED_FILTERER.get_or_init(|| load_plugin(filter_library_path, filter_arg))
     })
 }
