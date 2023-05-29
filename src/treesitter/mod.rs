@@ -1,5 +1,5 @@
 use grep::matcher::Match;
-use tree_sitter::{Language, Parser, Query, QueryCursor};
+use tree_sitter::{Language, Node, Parser, Query, QueryCursor};
 
 pub fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
@@ -18,6 +18,7 @@ pub fn get_matches(
     capture_index: u32,
     file_text_as_bytes: &[u8],
     language: Language,
+    filter: Option<bool>,
 ) -> Vec<Match> {
     let mut query_cursor = QueryCursor::new();
     let file_text =
@@ -28,6 +29,13 @@ pub fn get_matches(
         .flat_map(|match_| {
             match_
                 .nodes_for_capture_index(capture_index)
+                .filter(|node| {
+                    if filter == Some(true) {
+                        hardcoded_filter(node)
+                    } else {
+                        true
+                    }
+                })
                 .collect::<Vec<_>>()
         })
         .map(|node| {
@@ -36,4 +44,8 @@ pub fn get_matches(
             Match::new(range.start_byte, range.end_byte)
         })
         .collect()
+}
+
+fn hardcoded_filter(node: &Node) -> bool {
+    node.start_position().row > 15
 }

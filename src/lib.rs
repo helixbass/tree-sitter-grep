@@ -27,6 +27,8 @@ pub struct Args {
     pub capture_name: Option<String>,
     #[arg(short, long, value_enum)]
     pub language: SupportedLanguageName,
+    #[arg(short, long)]
+    pub filter: Option<bool>,
 }
 
 #[derive(clap::Args)]
@@ -57,7 +59,7 @@ pub fn run(args: Args) {
             let mut printer = grep::printer::Standard::new_no_color(io::stdout());
             let path = project_file_dir_entry.path();
 
-            let matcher = TreeSitterMatcher::new(&query, capture_index, language);
+            let matcher = TreeSitterMatcher::new(&query, capture_index, language, args.filter);
 
             SearcherBuilder::new()
                 .multi_line(true)
@@ -88,15 +90,22 @@ struct TreeSitterMatcher<'query> {
     query: &'query Query,
     capture_index: u32,
     language: Language,
+    filter: Option<bool>,
     matches_info: RefCell<Option<PopulatedMatchesInfo>>,
 }
 
 impl<'query> TreeSitterMatcher<'query> {
-    fn new(query: &'query Query, capture_index: u32, language: Language) -> Self {
+    fn new(
+        query: &'query Query,
+        capture_index: u32,
+        language: Language,
+        filter: Option<bool>,
+    ) -> Self {
         Self {
             query,
             capture_index,
             language,
+            filter,
             matches_info: Default::default(),
         }
     }
@@ -118,7 +127,13 @@ impl Matcher for TreeSitterMatcher<'_> {
         let matches_info = matches_info.get_or_insert_with(|| {
             assert!(at == 0);
             PopulatedMatchesInfo {
-                matches: get_matches(self.query, self.capture_index, haystack, self.language),
+                matches: get_matches(
+                    self.query,
+                    self.capture_index,
+                    haystack,
+                    self.language,
+                    self.filter,
+                ),
                 text_len: haystack.len(),
             }
         });
