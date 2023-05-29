@@ -1,8 +1,5 @@
-use crate::regex;
-use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
-use tree_sitter::{Language, Parser, Point, Query, QueryCursor};
+use grep::matcher::Match;
+use tree_sitter::{Language, Parser, Query, QueryCursor};
 
 pub fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
@@ -16,61 +13,27 @@ pub fn get_query(source: &str, language: Language) -> Query {
     Query::new(language, source).unwrap()
 }
 
-pub struct Result {
-    pub point: Point,
-    pub line_text: String,
-    pub file_path: PathBuf,
-}
-
-impl Result {
-    pub fn format(&self) -> String {
-        format!(
-            "{}:{}:{}:{}",
-            format_path(&self.file_path),
-            self.point.row + 1,
-            self.point.column + 1,
-            self.line_text,
-        )
-    }
-}
-
-fn format_path(path: &Path) -> String {
-    regex!(r#"^\./"#)
-        .replace(&format!("{}", path.display()), "")
-        .into_owned()
-}
-
-pub fn get_results(
+pub fn get_matches(
     query: &Query,
-    file_path: impl AsRef<Path>,
     capture_index: u32,
+    file_text_as_bytes: &[u8],
     language: Language,
-) -> Vec<Result> {
+) -> Vec<Match> {
     let mut query_cursor = QueryCursor::new();
-    let file_path = file_path.as_ref();
-    let file_text = fs::read_to_string(file_path).unwrap();
-    let tree = get_parser(language).parse(&file_text, None).unwrap();
+    let file_text =
+        std::str::from_utf8(file_text_as_bytes).expect("Expected file text to be valid UTF-8");
+    let tree = get_parser(language).parse(file_text, None).unwrap();
     query_cursor
-        .matches(query, tree.root_node(), file_text.as_bytes())
+        .matches(query, tree.root_node(), file_text_as_bytes)
         .flat_map(|match_| {
             match_
                 .nodes_for_capture_index(capture_index)
                 .collect::<Vec<_>>()
         })
         .map(|node| {
-            let point = node.start_position();
-            Result {
-                point,
-                line_text: {
-                    let file = File::open(file_path).unwrap();
-                    BufReader::new(file)
-                        .lines()
-                        .nth(point.row)
-                        .unwrap()
-                        .unwrap()
-                },
-                file_path: file_path.to_owned(),
-            }
+            let range = node.range();
+
+            Match::new(range.start_byte, range.end_byte)
         })
         .collect()
 }
