@@ -3,20 +3,21 @@ use grep::matcher::Match;
 use grep::matcher::Matcher;
 use grep::matcher::NoCaptures;
 use grep::matcher::NoError;
-use grep::searcher::Searcher;
+use grep::searcher::SearcherBuilder;
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
 use rayon::prelude::*;
+use std::cell::RefCell;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use tree_sitter::{Language, Query};
 
 mod language;
 mod macros;
 mod treesitter;
 
 use language::{SupportedLanguage, SupportedLanguageName};
-use treesitter::{get_query, get_results};
+use treesitter::{get_matches, get_query};
 
 #[derive(Parser)]
 pub struct Args {
@@ -55,11 +56,12 @@ pub fn run(args: Args) {
         .for_each(|project_file_dir_entry| {
             let mut printer = grep::printer::Standard::new_no_color(io::stdout());
             let path = project_file_dir_entry.path();
-            let matches = get_results(&query, path, capture_index, language);
 
-            let matcher = TreeSitterMatcher::new(matches);
+            let matcher = TreeSitterMatcher::new(&query, capture_index, language);
 
-            Searcher::new()
+            SearcherBuilder::new()
+                .multi_line(true)
+                .build()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
                 .unwrap();
         })
@@ -80,37 +82,72 @@ fn enumerate_project_files(language: &dyn SupportedLanguage) -> Vec<DirEntry> {
         .filter(|entry| entry.metadata().unwrap().is_file())
         .collect()
 }
+
 #[derive(Debug)]
-struct TreeSitterMatcher {
-    matches: Mutex<Vec<Match>>,
+struct TreeSitterMatcher<'query> {
+    query: &'query Query,
+    capture_index: u32,
+    language: Language,
+    matches_info: RefCell<Option<PopulatedMatchesInfo>>,
 }
 
-impl TreeSitterMatcher {
-    fn new(mut matches: Vec<Match>) -> Self {
-        matches.sort_by_key(|m| m.start());
-
+impl<'query> TreeSitterMatcher<'query> {
+    fn new(query: &'query Query, capture_index: u32, language: Language) -> Self {
         Self {
-            matches: Mutex::new(matches),
+            query,
+            capture_index,
+            language,
+            matches_info: Default::default(),
         }
     }
 }
 
-impl Matcher for TreeSitterMatcher {
+impl Matcher for TreeSitterMatcher<'_> {
     type Captures = NoCaptures;
 
     type Error = NoError;
 
-    fn find_at(&self, _haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error> {
-        let _match = self
-            .matches
-            .lock()
-            .unwrap()
-            .pop()
-            .map(|m| Match::new(m.start() - at, m.end() - at));
-        Ok(_match)
+    fn find_at(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error> {
+        let mut matches_info = self.matches_info.borrow_mut();
+        if let Some(matches_info) = matches_info.as_ref() {
+            assert!(
+                haystack.len() < matches_info.text_len,
+                "Expected to get passed subset of file text on subsequent invocations"
+            );
+        }
+        let matches_info = matches_info.get_or_insert_with(|| {
+            assert!(at == 0);
+            PopulatedMatchesInfo {
+                matches: get_matches(self.query, self.capture_index, haystack, self.language),
+                text_len: haystack.len(),
+            }
+        });
+        if matches_info.matches.is_empty() {
+            return Ok(None);
+        }
+        let match_ = matches_info.matches.remove(0);
+        Ok(Some(adjust_match(
+            match_,
+            haystack.len(),
+            matches_info.text_len,
+        )))
     }
 
     fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
         Ok(NoCaptures::new())
     }
+}
+
+#[derive(Debug)]
+struct PopulatedMatchesInfo {
+    matches: Vec<Match>,
+    text_len: usize,
+}
+
+fn adjust_match(match_: Match, haystack_len: usize, total_file_text_len: usize) -> Match {
+    let offset_in_file = total_file_text_len - haystack_len;
+    Match::new(
+        match_.start() - offset_in_file,
+        match_.end() - offset_in_file,
+    )
 }
