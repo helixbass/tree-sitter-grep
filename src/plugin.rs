@@ -10,7 +10,6 @@ type RawSymbol<TExportedSymbol> = libloading::os::unix::Symbol<TExportedSymbol>;
 type RawSymbol<TExportedSymbol> = libloading::os::windows::Symbol<TExportedSymbol>;
 
 pub struct Filterer {
-    // filterer: Symbol<fn(&Node) -> bool>,
     filterer: RawSymbol<unsafe extern "C" fn(*const Node) -> bool>,
     _library: Library,
 }
