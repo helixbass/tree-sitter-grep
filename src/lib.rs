@@ -4,12 +4,17 @@ use grep::matcher::Matcher;
 use grep::matcher::NoCaptures;
 use grep::matcher::NoError;
 use grep::searcher::SearcherBuilder;
+use ignore::WalkState;
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
-use rayon::prelude::*;
 use std::cell::RefCell;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::thread;
+use threadpool::ThreadPool;
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -50,36 +55,48 @@ pub fn run(args: Args) {
     };
     let supported_language = args.language.get_language();
     let language = supported_language.language();
-    let query = get_query(&query_source, language);
+    let query = Arc::new(get_query(&query_source, language));
     let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
         query
             .capture_index_for_name(capture_name)
             .expect(&format!("Unknown capture name: `{}`", capture_name))
     });
 
-    enumerate_project_files(&*supported_language)
-        .par_iter()
-        .for_each(|project_file_dir_entry| {
-            let mut printer = grep::printer::Standard::new_no_color(io::stdout());
-            let path = project_file_dir_entry.path();
+    let (sender, receiver) = mpsc::channel::<DirEntry>();
+    let handle = thread::spawn(move || {
+        let thread_pool = ThreadPool::new(num_cpus::get());
+        while let Ok(project_file_dir_entry) = receiver.recv() {
+            thread_pool.execute({
+                let query = query.clone();
+                let args_filter = args.filter.clone();
+                let args_filter_arg = args.filter_arg.clone();
+                move || {
+                    let mut printer = grep::printer::Standard::new_no_color(io::stdout());
+                    let path = project_file_dir_entry.path();
 
-            let matcher = TreeSitterMatcher::new(
-                &query,
-                capture_index,
-                language,
-                args.filter.clone(),
-                args.filter_arg.clone(),
-            );
+                    let matcher = TreeSitterMatcher::new(
+                        &query,
+                        capture_index,
+                        language,
+                        args_filter,
+                        args_filter_arg,
+                    );
 
-            SearcherBuilder::new()
-                .multi_line(true)
-                .build()
-                .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
-                .unwrap();
-        })
+                    SearcherBuilder::new()
+                        .multi_line(true)
+                        .build()
+                        .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
+                        .unwrap();
+                }
+            });
+        }
+        thread_pool.join();
+    });
+    walk_project_files(&*supported_language, sender);
+    handle.join().unwrap();
 }
 
-fn enumerate_project_files(language: &dyn SupportedLanguage) -> Vec<DirEntry> {
+fn walk_project_files(language: &dyn SupportedLanguage, sender: Sender<DirEntry>) {
     WalkBuilder::new(".")
         .types(
             TypesBuilder::new()
@@ -88,11 +105,23 @@ fn enumerate_project_files(language: &dyn SupportedLanguage) -> Vec<DirEntry> {
                 .build()
                 .unwrap(),
         )
-        .build()
-        .into_iter()
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| entry.metadata().unwrap().is_file())
-        .collect()
+        .build_parallel()
+        .run(move || {
+            Box::new({
+                let sender = sender.clone();
+                move |entry| {
+                    let entry = match entry {
+                        Err(_) => return WalkState::Continue,
+                        Ok(entry) => entry,
+                    };
+                    if !entry.metadata().unwrap().is_file() {
+                        return WalkState::Continue;
+                    }
+                    sender.send(entry).unwrap();
+                    WalkState::Continue
+                }
+            })
+        });
 }
 
 #[derive(Debug)]
