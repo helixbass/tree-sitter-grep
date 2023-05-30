@@ -23,3 +23,6 @@ name = "tree_sitter_grep"
 
 [[bin]]
 name = "tree-sitter-grep"
+
+[workspace]
+members = ["tree_sitter_grep_filter_before_line_number"]
