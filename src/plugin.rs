@@ -31,9 +31,6 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
         let filter_arg = filter_arg.map(|filter_arg| {
             CString::new(filter_arg).expect("Couldn't convert provided filter arg to CString")
         });
-        // unsafe {
-        //     initialize(filter_arg.map_or_else(|| ptr::null(), |filter_arg| filter_arg.as_ptr()));
-        // }
         if let Some(filter_arg) = filter_arg {
             unsafe {
                 initialize(filter_arg.as_ptr());
