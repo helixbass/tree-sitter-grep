@@ -5,9 +5,9 @@ use std::ptr;
 use tree_sitter::Node;
 
 #[cfg(unix)]
-type RawSymbol<TValue> = libloading::os::unix::Symbol<TValue>;
+type RawSymbol<TExportedSymbol> = libloading::os::unix::Symbol<TExportedSymbol>;
 #[cfg(windows)]
-type RawSymbol<TValue> = libloading::os::windows::Symbol<TValue>;
+type RawSymbol<TExportedSymbol> = libloading::os::windows::Symbol<TExportedSymbol>;
 
 pub struct Filterer {
     // filterer: Symbol<fn(&Node) -> bool>,
