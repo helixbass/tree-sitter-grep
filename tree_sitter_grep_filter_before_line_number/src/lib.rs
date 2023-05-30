@@ -21,5 +21,5 @@ pub extern "C" fn initialize(value: *const c_char) {
 
 #[no_mangle]
 pub extern "C" fn filterer(node: &Node) -> bool {
-    node.start_position().row > ROW_NUMBER.load(Ordering::Relaxed)
+    node.start_position().row < ROW_NUMBER.load(Ordering::Relaxed)
 }
