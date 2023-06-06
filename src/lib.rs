@@ -7,6 +7,7 @@ use grep::searcher::SearcherBuilder;
 use ignore::WalkParallel;
 use ignore::WalkState;
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
+use rayon::iter::IterBridge;
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::fs;
@@ -64,8 +65,8 @@ pub fn run(args: Args) {
             .expect(&format!("Unknown capture name: `{}`", capture_name))
     });
 
-    WalkParallelIterator::new(get_project_file_walker(&*supported_language))
-        .par_bridge()
+    get_project_file_walker(&*supported_language)
+        .into_parallel_iterator()
         .for_each({
             |project_file_dir_entry| {
                 let mut printer = grep::printer::Standard::new_no_color(io::stdout());
@@ -86,6 +87,16 @@ pub fn run(args: Args) {
                     .unwrap();
             }
         });
+}
+
+trait IntoParallelIterator {
+    fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator>;
+}
+
+impl IntoParallelIterator for WalkParallel {
+    fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator> {
+        WalkParallelIterator::new(self).par_bridge()
+    }
 }
 
 struct WalkParallelIterator {
