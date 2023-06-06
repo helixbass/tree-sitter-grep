@@ -4,17 +4,19 @@ use grep::matcher::Matcher;
 use grep::matcher::NoCaptures;
 use grep::matcher::NoError;
 use grep::searcher::SearcherBuilder;
+use ignore::WalkParallel;
 use ignore::WalkState;
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
+use rayon::prelude::*;
 use std::cell::RefCell;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::sync::mpsc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
-use threadpool::ThreadPool;
+use std::thread::JoinHandle;
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -62,41 +64,78 @@ pub fn run(args: Args) {
             .expect(&format!("Unknown capture name: `{}`", capture_name))
     });
 
-    let (sender, receiver) = mpsc::channel::<DirEntry>();
-    let handle = thread::spawn(move || {
-        let thread_pool = ThreadPool::new(num_cpus::get());
-        while let Ok(project_file_dir_entry) = receiver.recv() {
-            thread_pool.execute({
-                let query = query.clone();
-                let args_filter = args.filter.clone();
-                let args_filter_arg = args.filter_arg.clone();
-                move || {
-                    let mut printer = grep::printer::Standard::new_no_color(io::stdout());
-                    let path = project_file_dir_entry.path();
+    WalkParallelIterator::new(get_project_file_walker(&*supported_language))
+        .par_bridge()
+        .for_each({
+            |project_file_dir_entry| {
+                let mut printer = grep::printer::Standard::new_no_color(io::stdout());
+                let path = project_file_dir_entry.path();
 
-                    let matcher = TreeSitterMatcher::new(
-                        &query,
-                        capture_index,
-                        language,
-                        args_filter,
-                        args_filter_arg,
-                    );
+                let matcher = TreeSitterMatcher::new(
+                    &query,
+                    capture_index,
+                    language,
+                    args.filter.clone(),
+                    args.filter_arg.clone(),
+                );
 
-                    SearcherBuilder::new()
-                        .multi_line(true)
-                        .build()
-                        .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
-                        .unwrap();
-                }
-            });
-        }
-        thread_pool.join();
-    });
-    walk_project_files(&*supported_language, sender);
-    handle.join().unwrap();
+                SearcherBuilder::new()
+                    .multi_line(true)
+                    .build()
+                    .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
+                    .unwrap();
+            }
+        });
 }
 
-fn walk_project_files(language: &dyn SupportedLanguage, sender: Sender<DirEntry>) {
+struct WalkParallelIterator {
+    receiver_iterator: <Receiver<DirEntry> as IntoIterator>::IntoIter,
+    _handle: JoinHandle<()>,
+}
+
+impl WalkParallelIterator {
+    pub fn new(walk_parallel: WalkParallel) -> Self {
+        let (sender, receiver) = mpsc::channel::<DirEntry>();
+        let handle = thread::spawn(move || {
+            walk_parallel.run(move || {
+                Box::new({
+                    let sender = sender.clone();
+                    move |entry| {
+                        let entry = match entry {
+                            Err(_) => return WalkState::Continue,
+                            Ok(entry) => entry,
+                        };
+                        if !entry.metadata().unwrap().is_file() {
+                            return WalkState::Continue;
+                        }
+                        sender.send(entry).unwrap();
+                        WalkState::Continue
+                    }
+                })
+            });
+        });
+        Self {
+            receiver_iterator: receiver.into_iter(),
+            _handle: handle,
+        }
+    }
+}
+
+impl Iterator for WalkParallelIterator {
+    type Item = DirEntry;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.receiver_iterator.next() {
+            Some(item) => Some(item),
+            None => {
+                // self.handle.join().unwrap();
+                None
+            }
+        }
+    }
+}
+
+fn get_project_file_walker(language: &dyn SupportedLanguage) -> WalkParallel {
     WalkBuilder::new(".")
         .types(
             TypesBuilder::new()
@@ -106,22 +145,6 @@ fn walk_project_files(language: &dyn SupportedLanguage, sender: Sender<DirEntry>
                 .unwrap(),
         )
         .build_parallel()
-        .run(move || {
-            Box::new({
-                let sender = sender.clone();
-                move |entry| {
-                    let entry = match entry {
-                        Err(_) => return WalkState::Continue,
-                        Ok(entry) => entry,
-                    };
-                    if !entry.metadata().unwrap().is_file() {
-                        return WalkState::Continue;
-                    }
-                    sender.send(entry).unwrap();
-                    WalkState::Continue
-                }
-            })
-        });
 }
 
 #[derive(Debug)]
