@@ -1,6 +1,8 @@
 use grep::matcher::Match;
 use tree_sitter::{Language, Parser, Query, QueryCursor};
 
+use crate::plugin::Filterer;
+
 pub fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
     parser
@@ -18,6 +20,7 @@ pub fn get_matches(
     capture_index: u32,
     file_text_as_bytes: &[u8],
     language: Language,
+    filter: Option<&'static Filterer>,
 ) -> Vec<Match> {
     let mut query_cursor = QueryCursor::new();
     let file_text =
@@ -28,6 +31,7 @@ pub fn get_matches(
         .flat_map(|match_| {
             match_
                 .nodes_for_capture_index(capture_index)
+                .filter(|node| filter.map_or(true, |filter| filter.call(node)))
                 .collect::<Vec<_>>()
         })
         .map(|node| {

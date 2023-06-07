@@ -14,9 +14,11 @@ use tree_sitter::{Language, Query};
 
 mod language;
 mod macros;
+mod plugin;
 mod treesitter;
 
 use language::{SupportedLanguage, SupportedLanguageName};
+use plugin::get_loaded_filter;
 use treesitter::{get_matches, get_query};
 
 #[derive(Parser)]
@@ -27,6 +29,10 @@ pub struct Args {
     pub capture_name: Option<String>,
     #[arg(short, long, value_enum)]
     pub language: SupportedLanguageName,
+    #[arg(short, long)]
+    pub filter: Option<String>,
+    #[arg(short = 'a', long)]
+    pub filter_arg: Option<String>,
 }
 
 #[derive(clap::Args)]
@@ -57,7 +63,13 @@ pub fn run(args: Args) {
             let mut printer = grep::printer::Standard::new_no_color(io::stdout());
             let path = project_file_dir_entry.path();
 
-            let matcher = TreeSitterMatcher::new(&query, capture_index, language);
+            let matcher = TreeSitterMatcher::new(
+                &query,
+                capture_index,
+                language,
+                args.filter.clone(),
+                args.filter_arg.clone(),
+            );
 
             SearcherBuilder::new()
                 .multi_line(true)
@@ -88,15 +100,25 @@ struct TreeSitterMatcher<'query> {
     query: &'query Query,
     capture_index: u32,
     language: Language,
+    filter_library_path: Option<String>,
+    filter_arg: Option<String>,
     matches_info: RefCell<Option<PopulatedMatchesInfo>>,
 }
 
 impl<'query> TreeSitterMatcher<'query> {
-    fn new(query: &'query Query, capture_index: u32, language: Language) -> Self {
+    fn new(
+        query: &'query Query,
+        capture_index: u32,
+        language: Language,
+        filter_library_path: Option<String>,
+        filter_arg: Option<String>,
+    ) -> Self {
         Self {
             query,
             capture_index,
             language,
+            filter_library_path,
+            filter_arg,
             matches_info: Default::default(),
         }
     }
@@ -118,7 +140,16 @@ impl Matcher for TreeSitterMatcher<'_> {
         let matches_info = matches_info.get_or_insert_with(|| {
             assert!(at == 0);
             PopulatedMatchesInfo {
-                matches: get_matches(self.query, self.capture_index, haystack, self.language),
+                matches: get_matches(
+                    self.query,
+                    self.capture_index,
+                    haystack,
+                    self.language,
+                    get_loaded_filter(
+                        self.filter_library_path.as_deref(),
+                        self.filter_arg.as_deref(),
+                    ),
+                ),
                 text_len: haystack.len(),
             }
         });
