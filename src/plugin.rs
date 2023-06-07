@@ -5,12 +5,11 @@ use std::ptr;
 use tree_sitter::Node;
 
 #[cfg(unix)]
-type RawSymbol<TValue> = libloading::os::unix::Symbol<TValue>;
+type RawSymbol<TExportedSymbol> = libloading::os::unix::Symbol<TExportedSymbol>;
 #[cfg(windows)]
-type RawSymbol<TValue> = libloading::os::windows::Symbol<TValue>;
+type RawSymbol<TExportedSymbol> = libloading::os::windows::Symbol<TExportedSymbol>;
 
 pub struct Filterer {
-    // filterer: Symbol<fn(&Node) -> bool>,
     filterer: RawSymbol<unsafe extern "C" fn(*const Node) -> bool>,
     _library: Library,
 }
@@ -31,17 +30,12 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
         let filter_arg = filter_arg.map(|filter_arg| {
             CString::new(filter_arg).expect("Couldn't convert provided filter arg to CString")
         });
-        // unsafe {
-        //     initialize(filter_arg.map_or_else(|| ptr::null(), |filter_arg| filter_arg.as_ptr()));
-        // }
-        if let Some(filter_arg) = filter_arg {
-            unsafe {
-                initialize(filter_arg.as_ptr());
-            }
-        } else {
-            unsafe {
-                initialize(ptr::null());
-            }
+        unsafe {
+            initialize(
+                filter_arg
+                    .as_ref()
+                    .map_or_else(|| ptr::null(), |filter_arg| filter_arg.as_ptr()),
+            );
         }
     }
 
