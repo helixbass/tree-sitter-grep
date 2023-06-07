@@ -67,25 +67,23 @@ pub fn run(args: Args) {
 
     get_project_file_walker(&*supported_language)
         .into_parallel_iterator()
-        .for_each({
-            |project_file_dir_entry| {
-                let mut printer = grep::printer::Standard::new_no_color(io::stdout());
-                let path = project_file_dir_entry.path();
+        .for_each(|project_file_dir_entry| {
+            let mut printer = grep::printer::Standard::new_no_color(io::stdout());
+            let path = project_file_dir_entry.path();
 
-                let matcher = TreeSitterMatcher::new(
-                    &query,
-                    capture_index,
-                    language,
-                    args.filter.clone(),
-                    args.filter_arg.clone(),
-                );
+            let matcher = TreeSitterMatcher::new(
+                &query,
+                capture_index,
+                language,
+                args.filter.clone(),
+                args.filter_arg.clone(),
+            );
 
-                SearcherBuilder::new()
-                    .multi_line(true)
-                    .build()
-                    .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
-                    .unwrap();
-            }
+            SearcherBuilder::new()
+                .multi_line(true)
+                .build()
+                .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
+                .unwrap();
         });
 }
 
@@ -136,13 +134,7 @@ impl Iterator for WalkParallelIterator {
     type Item = DirEntry;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.receiver_iterator.next() {
-            Some(item) => Some(item),
-            None => {
-                // self.handle.join().unwrap();
-                None
-            }
-        }
+        self.receiver_iterator.next()
     }
 }
 
