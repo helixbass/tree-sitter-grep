@@ -136,13 +136,7 @@ impl Iterator for WalkParallelIterator {
     type Item = DirEntry;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.receiver_iterator.next() {
-            Some(item) => Some(item),
-            None => {
-                // self.handle.join().unwrap();
-                None
-            }
-        }
+        self.receiver_iterator.next()
     }
 }
 
