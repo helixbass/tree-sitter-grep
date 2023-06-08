@@ -3,6 +3,7 @@ use grep::matcher::Match;
 use grep::matcher::Matcher;
 use grep::matcher::NoCaptures;
 use grep::matcher::NoError;
+use grep::searcher::Searcher;
 use grep::searcher::SearcherBuilder;
 use ignore::WalkParallel;
 use ignore::WalkState;
@@ -41,6 +42,8 @@ pub struct Args {
     pub filter: Option<String>,
     #[arg(short = 'a', long)]
     pub filter_arg: Option<String>,
+    #[arg(long)]
+    pub vimgrep: bool,
 }
 
 #[derive(clap::Args)]
@@ -49,6 +52,20 @@ pub struct QueryArgs {
     pub path_to_query_file: Option<PathBuf>,
     #[arg(short, long)]
     pub query_source: Option<String>,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum OutputMode {
+    Normal,
+    Vimgrep,
+}
+
+fn get_output_mode(args: &Args) -> OutputMode {
+    if args.vimgrep {
+        OutputMode::Vimgrep
+    } else {
+        OutputMode::Normal
+    }
 }
 
 pub fn run(args: Args) {
@@ -64,11 +81,12 @@ pub fn run(args: Args) {
             .capture_index_for_name(capture_name)
             .expect(&format!("Unknown capture name: `{}`", capture_name))
     });
+    let output_mode = get_output_mode(&args);
 
     get_project_file_walker(&*supported_language)
         .into_parallel_iterator()
         .for_each(|project_file_dir_entry| {
-            let mut printer = grep::printer::Standard::new_no_color(io::stdout());
+            let mut printer = get_printer(output_mode);
             let path = project_file_dir_entry.path();
 
             let matcher = TreeSitterMatcher::new(
@@ -79,12 +97,33 @@ pub fn run(args: Args) {
                 args.filter_arg.clone(),
             );
 
-            SearcherBuilder::new()
-                .multi_line(true)
-                .build()
+            get_searcher(output_mode)
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
                 .unwrap();
         });
+}
+
+fn get_printer(output_mode: OutputMode) -> grep::printer::Standard<termcolor::NoColor<io::Stdout>> {
+    match output_mode {
+        OutputMode::Normal => grep::printer::Standard::new_no_color(io::stdout()),
+        OutputMode::Vimgrep => grep::printer::StandardBuilder::new()
+            .per_match(true)
+            .per_match_one_line(true)
+            .column(true)
+            .heading(false)
+            .path(true)
+            .build_no_color(io::stdout()),
+    }
+}
+
+fn get_searcher(output_mode: OutputMode) -> Searcher {
+    match output_mode {
+        OutputMode::Normal => SearcherBuilder::new().multi_line(true).build(),
+        OutputMode::Vimgrep => SearcherBuilder::new()
+            .multi_line(true)
+            .line_number(true)
+            .build(),
+    }
 }
 
 trait IntoParallelIterator {
@@ -186,12 +225,6 @@ impl Matcher for TreeSitterMatcher<'_> {
 
     fn find_at(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error> {
         let mut matches_info = self.matches_info.borrow_mut();
-        if let Some(matches_info) = matches_info.as_ref() {
-            assert!(
-                haystack.len() < matches_info.text_len,
-                "Expected to get passed subset of file text on subsequent invocations"
-            );
-        }
         let matches_info = matches_info.get_or_insert_with(|| {
             assert!(at == 0);
             PopulatedMatchesInfo {
@@ -208,15 +241,7 @@ impl Matcher for TreeSitterMatcher<'_> {
                 text_len: haystack.len(),
             }
         });
-        if matches_info.matches.is_empty() {
-            return Ok(None);
-        }
-        let match_ = matches_info.matches.remove(0);
-        Ok(Some(adjust_match(
-            match_,
-            haystack.len(),
-            matches_info.text_len,
-        )))
+        Ok(matches_info.find_and_adjust_first_in_range_match(haystack.len(), at))
     }
 
     fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
@@ -230,7 +255,25 @@ struct PopulatedMatchesInfo {
     text_len: usize,
 }
 
-fn adjust_match(match_: Match, haystack_len: usize, total_file_text_len: usize) -> Match {
+impl PopulatedMatchesInfo {
+    pub fn find_and_adjust_first_in_range_match(
+        &self,
+        haystack_len: usize,
+        at: usize,
+    ) -> Option<Match> {
+        self.find_first_in_range_match(haystack_len, at)
+            .map(|match_| adjust_match(match_, haystack_len, self.text_len))
+    }
+
+    pub fn find_first_in_range_match(&self, haystack_len: usize, at: usize) -> Option<&Match> {
+        let start_index = at + (self.text_len - haystack_len);
+        self.matches
+            .iter()
+            .find(|match_| match_.start() >= start_index)
+    }
+}
+
+fn adjust_match(match_: &Match, haystack_len: usize, total_file_text_len: usize) -> Match {
     let offset_in_file = total_file_text_len - haystack_len;
     Match::new(
         match_.start() - offset_in_file,
