@@ -27,7 +27,8 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
     let library =
         unsafe { Library::new(library_path).expect("Couldn't load filter dynamic library") };
 
-    if let Ok(initialize) = unsafe { library.get::<unsafe extern "C" fn(*const libc::c_char)>(b"initialize\0") }
+    if let Ok(initialize) =
+        unsafe { library.get::<unsafe extern "C" fn(*const libc::c_char)>(b"initialize\0") }
     {
         let filter_arg = filter_arg.map(|filter_arg| {
             CString::new(filter_arg).expect("Couldn't convert provided filter arg to CString")
