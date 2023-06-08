@@ -7,8 +7,6 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive"] }
-# grep = "0.2.12"
-# grep = { path = "../ripgrep/crates/grep" }
 grep = { git = "https://github.com/helixbass/ripgrep", rev = "b83cc3c" }
 ignore = "0.4.20"
 libc = "0.2.144"
