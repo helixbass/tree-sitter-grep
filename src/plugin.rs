@@ -1,7 +1,10 @@
+use std::{
+    ffi::{CString, OsStr},
+    ptr,
+};
+
 use libloading::Library;
 use once_cell::sync::OnceCell;
-use std::ffi::{CString, OsStr};
-use std::ptr;
 use tree_sitter::Node;
 
 #[cfg(unix)]
