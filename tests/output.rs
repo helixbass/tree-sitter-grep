@@ -1,176 +1,13 @@
 use assert_cmd::prelude::*;
-use once_cell::sync::Lazy;
-use predicates::{prelude::*, BoxPredicate};
-use std::{
-    env,
-    ffi::OsStr,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use predicates::prelude::*;
+use std::{env, path::PathBuf, process::Command};
 
-struct Location {
-    line: usize,
-    #[allow(dead_code)]
-    column: usize,
-}
-
-impl From<(usize, usize)> for Location {
-    fn from(value: (usize, usize)) -> Self {
-        Self {
-            line: value.0,
-            column: value.1,
-        }
-    }
-}
-
-struct Range {
-    pub start: Location,
-    #[allow(dead_code)]
-    pub end: Location,
-}
-
-impl From<((usize, usize), (usize, usize))> for Range {
-    fn from(value: ((usize, usize), (usize, usize))) -> Self {
-        Self {
-            start: value.0.into(),
-            end: value.1.into(),
-        }
-    }
-}
-
-struct ExpectedMatch {
-    pub relative_file_path: String,
-    pub lines: Vec<String>,
-    pub range: Range,
-}
-
-const MATCH_OUTPUT_LINE_REGEX_STR: &'static str = r#"(^|\n).+:\d+:"#;
-
-fn predicate_from_expected_matches(
-    expected_matches: &[ExpectedMatch],
-    output_mode: OutputMode,
-) -> BoxPredicate<str> {
-    expected_matches.into_iter().fold(
-        BoxPredicate::new(
-            predicate::str::is_match(MATCH_OUTPUT_LINE_REGEX_STR)
-                .unwrap()
-                .count(output_mode.get_expected_total_number_of_match_lines(expected_matches)),
-        ),
-        |predicate, expected_match| {
-            BoxPredicate::new(
-                predicate.and(predicate_from_expected_match(expected_match, output_mode)),
-            )
-        },
-    )
-}
-
-fn predicate_from_expected_match(
-    expected_match: &ExpectedMatch,
-    output_mode: OutputMode,
-) -> BoxPredicate<str> {
-    BoxPredicate::new(predicate::str::contains(
-        output_mode.expected_output_text(expected_match),
-    ))
-}
-
-fn assert_expected_matches<TArg: AsRef<OsStr>>(
-    args: impl IntoIterator<Item = TArg>,
-    current_dir: impl AsRef<Path>,
-    expected_matches: &[ExpectedMatch],
-    output_mode: OutputMode,
-) {
-    Command::cargo_bin("tree-sitter-grep")
-        .unwrap()
-        .args(args)
-        .current_dir(current_dir)
-        .assert()
-        .success()
-        .stdout(predicate_from_expected_matches(
-            expected_matches,
-            output_mode,
-        ));
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum OutputMode {
-    Normal,
-    Vimgrep,
-}
-
-impl OutputMode {
-    pub fn get_expected_total_number_of_match_lines(
-        &self,
-        expected_matches: &[ExpectedMatch],
-    ) -> usize {
-        match self {
-            Self::Normal => expected_matches
-                .into_iter()
-                .map(|expected_match| expected_match.lines.len())
-                .sum(),
-            Self::Vimgrep => expected_matches.len(),
-        }
-    }
-
-    pub fn expected_output_text(&self, expected_match: &ExpectedMatch) -> String {
-        match self {
-            Self::Normal => expected_match
-                .lines
-                .iter()
-                .enumerate()
-                .map(|(line_index, line)| {
-                    format!(
-                        "{}:{}:{}",
-                        with_leading_dot_slash(&expected_match.relative_file_path),
-                        expected_match.range.start.line + line_index + 1,
-                        line
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-            Self::Vimgrep => format!(
-                "{}:{}:{}:{}",
-                expected_match.relative_file_path,
-                expected_match.range.start.line + 1,
-                expected_match.range.start.column + 1,
-                &expected_match.lines[0]
-            ),
-        }
-    }
-}
-
-fn with_leading_dot_slash(relative_path: &str) -> String {
-    if relative_path.starts_with(".") {
-        relative_path.to_owned()
-    } else {
-        format!("./{relative_path}")
-    }
-}
-
-struct FixtureQueryExpectedMatches {
-    pub fixture_dir_name: String,
-    pub language: String,
-    pub query_source: String,
-    pub expected_matches: Vec<ExpectedMatch>,
-}
-
-impl FixtureQueryExpectedMatches {
-    pub fn assert_expected_matches(&self, output_mode: OutputMode) {
-        let mut args = vec![
-            "--query-source",
-            &self.query_source,
-            "--language",
-            &self.language,
-        ];
-        if output_mode == OutputMode::Vimgrep {
-            args.push("--vimgrep");
-        }
-        assert_expected_matches(
-            args,
-            get_fixture_dir_path_from_name(&self.fixture_dir_name),
-            &self.expected_matches,
-            output_mode,
-        );
-    }
+#[macro_export]
+macro_rules! regex {
+    ($re:literal $(,)?) => {{
+        static RE: once_cell::sync::OnceCell<regex::Regex> = once_cell::sync::OnceCell::new();
+        RE.get_or_init(|| regex::Regex::new($re).unwrap())
+    }};
 }
 
 fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
@@ -182,47 +19,100 @@ fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
     path
 }
 
-const FUNCTION_ITEM_QUERY_SOURCE: &'static str = "(function_item) @function_item";
+fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
+    let mut lines = command_and_output.split("\n").collect::<Vec<_>>();
+    if !lines.is_empty() {
+        if regex!(r#"^\s*$"#).is_match(&lines[0]) {
+            lines.remove(0);
+        }
+    }
+    let command_line = lines.remove(0);
+    let indent = regex!(r#"^\s*"#).find(&command_line).unwrap().as_str();
+    let command_line_args = parse_command_line(strip_indent(&command_line, indent));
+    if !lines.is_empty() {
+        if regex!(r#"^\s*$"#).is_match(&lines[lines.len() - 1]) {
+            lines.pop();
+        }
+    }
+    let output: String = lines
+        .into_iter()
+        .map(|line| {
+            assert!(line.starts_with(indent));
+            format!("{}\n", strip_indent(line, indent))
+        })
+        .collect();
+    CommandAndOutput {
+        command_line_args,
+        output,
+    }
+}
 
-static RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES: Lazy<FixtureQueryExpectedMatches> =
-    Lazy::new(|| FixtureQueryExpectedMatches {
-        fixture_dir_name: "rust_project".into(),
-        query_source: FUNCTION_ITEM_QUERY_SOURCE.to_owned(),
-        language: "rust".to_owned(),
-        expected_matches: vec![
-            ExpectedMatch {
-                relative_file_path: "src/helpers.rs".to_owned(),
-                lines: vec!["pub fn helper() {}".to_owned()],
-                range: ((0, 0), (0, 18)).into(),
-            },
-            ExpectedMatch {
-                relative_file_path: "src/lib.rs".to_owned(),
-                lines: vec![
-                    "pub fn add(left: usize, right: usize) -> usize {".to_owned(),
-                    "    left + right".to_owned(),
-                    "}".to_owned(),
-                ],
-                range: ((2, 0), (5, 0)).into(),
-            },
-            ExpectedMatch {
-                relative_file_path: "src/lib.rs".to_owned(),
-                lines: vec![
-                    "    fn it_works() {".to_owned(),
-                    "        let result = add(2, 2);".to_owned(),
-                    "        assert_eq!(result, 4);".to_owned(),
-                    "    }".to_owned(),
-                ],
-                range: ((11, 4), (14, 4)).into(),
-            },
-        ],
-    });
+struct CommandAndOutput {
+    command_line_args: Vec<String>,
+    output: String,
+}
+
+fn strip_indent<'line>(line: &'line str, indent: &str) -> &'line str {
+    &line[indent.len()..]
+}
+
+fn parse_command_line(command_line: &str) -> Vec<String> {
+    assert!(command_line.starts_with("$"));
+    shlex::split(&command_line[1..]).unwrap()
+}
+
+fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
+    let CommandAndOutput {
+        mut command_line_args,
+        output,
+    } = parse_command_and_output(command_and_output);
+    let command_name = command_line_args.remove(0);
+    Command::cargo_bin(&command_name)
+        .unwrap()
+        .args(command_line_args)
+        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
+        .assert()
+        .success()
+        .stdout(predicate::function(|actual_output| {
+            do_sorted_lines_match(actual_output, &output)
+        }));
+}
+
+fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
+    let mut actual_lines = actual_output.split("\n").collect::<Vec<_>>();
+    actual_lines.sort();
+    let mut expected_lines = expected_output.split("\n").collect::<Vec<_>>();
+    expected_lines.sort();
+    actual_lines == expected_lines
+}
 
 #[test]
 fn test_query_inline() {
-    RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES.assert_expected_matches(OutputMode::Normal);
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust
+            ./src/helpers.rs:1:pub fn helper() {}
+            ./src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            ./src/lib.rs:4:    left + right
+            ./src/lib.rs:5:}
+            ./src/lib.rs:12:    fn it_works() {
+            ./src/lib.rs:13:        let result = add(2, 2);
+            ./src/lib.rs:14:        assert_eq!(result, 4);
+            ./src/lib.rs:15:    }
+        "#,
+    );
 }
 
 #[test]
 fn test_vimgrep_mode() {
-    RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES.assert_expected_matches(OutputMode::Vimgrep);
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --vimgrep
+            src/helpers.rs:1:1:pub fn helper() {}
+            src/lib.rs:3:1:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:12:5:    fn it_works() {
+       "#,
+    );
 }
