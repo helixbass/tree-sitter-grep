@@ -13,6 +13,7 @@ use rayon::prelude::*;
 use std::cell::RefCell;
 use std::fs;
 use std::io;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
@@ -87,7 +88,7 @@ pub fn run(args: Args) {
         .into_parallel_iterator()
         .for_each(|project_file_dir_entry| {
             let mut printer = get_printer(output_mode);
-            let path = project_file_dir_entry.path();
+            let path = format_relative_path(project_file_dir_entry.path(), output_mode);
 
             let matcher = TreeSitterMatcher::new(
                 &query,
@@ -101,6 +102,14 @@ pub fn run(args: Args) {
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
                 .unwrap();
         });
+}
+
+fn format_relative_path(path: &Path, output_mode: OutputMode) -> &Path {
+    if output_mode == OutputMode::Vimgrep && path.starts_with("./") {
+        path.strip_prefix("./").unwrap()
+    } else {
+        path
+    }
 }
 
 fn get_printer(output_mode: OutputMode) -> grep::printer::Standard<termcolor::NoColor<io::Stdout>> {
