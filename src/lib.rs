@@ -58,7 +58,7 @@ pub fn run(args: Args) {
     let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
         query
             .capture_index_for_name(capture_name)
-            .expect(&format!("Unknown capture name: `{}`", capture_name))
+            .unwrap_or_else(|| panic!("Unknown capture name: `{}`", capture_name))
     });
 
     get_project_file_walker(&*supported_language)
