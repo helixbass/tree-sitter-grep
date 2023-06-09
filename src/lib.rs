@@ -119,8 +119,6 @@ fn get_printer(output_mode: OutputMode) -> grep::printer::Standard<termcolor::No
             .per_match(true)
             .per_match_one_line(true)
             .column(true)
-            .heading(false)
-            .path(true)
             .build_no_color(io::stdout()),
     }
 }
