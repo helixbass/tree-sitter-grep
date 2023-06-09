@@ -3,23 +3,29 @@ use grep::matcher::Match;
 use grep::matcher::Matcher;
 use grep::matcher::NoCaptures;
 use grep::matcher::NoError;
+use grep::printer::Standard;
+use grep::printer::StandardBuilder;
 use grep::searcher::Searcher;
 use grep::searcher::SearcherBuilder;
 use ignore::WalkParallel;
 use ignore::WalkState;
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
+use once_cell::unsync::OnceCell;
 use rayon::iter::IterBridge;
 use rayon::prelude::*;
 use std::cell::RefCell;
 use std::fs;
-use std::io;
 use std::path::Path;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
+use termcolor::Buffer;
+use termcolor::BufferWriter;
+use termcolor::ColorChoice;
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -33,6 +39,7 @@ use treesitter::{get_matches, get_query};
 
 #[derive(Parser)]
 pub struct Args {
+    pub paths: Vec<PathBuf>,
     #[command(flatten)]
     pub query_args: QueryArgs,
     #[arg(short, long = "capture")]
@@ -47,9 +54,24 @@ pub struct Args {
     pub vimgrep: bool,
 }
 
+impl Args {
+    pub fn use_paths(&self) -> Vec<PathBuf> {
+        if self.paths.is_empty() {
+            vec![Path::new("./").to_owned()]
+        } else {
+            self.paths.clone()
+        }
+    }
+
+    pub fn is_using_default_paths(&self) -> bool {
+        self.paths.is_empty()
+    }
+}
+
 #[derive(clap::Args)]
 #[group(required = true, multiple = false)]
 pub struct QueryArgs {
+    #[arg(short = 'Q', long = "query-file")]
     pub path_to_query_file: Option<PathBuf>,
     #[arg(short, long)]
     pub query_source: Option<String>,
@@ -83,12 +105,15 @@ pub fn run(args: Args) {
             .expect(&format!("Unknown capture name: `{}`", capture_name))
     });
     let output_mode = get_output_mode(&args);
+    let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
 
-    get_project_file_walker(&*supported_language)
+    get_project_file_walker(&*supported_language, &args.use_paths())
         .into_parallel_iterator()
         .for_each(|project_file_dir_entry| {
-            let mut printer = get_printer(output_mode);
-            let path = format_relative_path(project_file_dir_entry.path(), output_mode);
+            let printer = get_printer(&buffer_writer, output_mode);
+            let mut printer = printer.borrow_mut();
+            let path =
+                format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
 
             let matcher = TreeSitterMatcher::new(
                 &query,
@@ -99,39 +124,81 @@ pub fn run(args: Args) {
             );
 
             get_searcher(output_mode)
+                .borrow_mut()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
                 .unwrap();
+            buffer_writer.print(printer.get_mut()).unwrap();
         });
 }
 
-fn format_relative_path(path: &Path, output_mode: OutputMode) -> &Path {
-    if output_mode == OutputMode::Vimgrep && path.starts_with("./") {
-        path.strip_prefix("./").unwrap()
-    } else {
-        path
-    }
+type Printer = Standard<Buffer>;
+
+thread_local! {
+    static PRINTER: OnceCell<(Rc<RefCell<Printer>>, OutputMode)> = Default::default();
+}
+fn get_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Rc<RefCell<Printer>> {
+    PRINTER.with(|printer| {
+        let (printer, output_mode_when_initialized) = printer.get_or_init(|| {
+            (
+                Rc::new(RefCell::new(create_printer(buffer_writer, output_mode))),
+                output_mode,
+            )
+        });
+        assert!(
+            *output_mode_when_initialized == output_mode,
+            "Using multiple output modes not supported"
+        );
+        printer.clone()
+    })
 }
 
-fn get_printer(output_mode: OutputMode) -> grep::printer::Standard<termcolor::NoColor<io::Stdout>> {
+fn create_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Printer {
     match output_mode {
-        OutputMode::Normal => grep::printer::Standard::new_no_color(io::stdout()),
-        OutputMode::Vimgrep => grep::printer::StandardBuilder::new()
+        OutputMode::Normal => Standard::new(buffer_writer.buffer()),
+        OutputMode::Vimgrep => StandardBuilder::new()
             .per_match(true)
             .per_match_one_line(true)
             .column(true)
             .heading(false)
             .path(true)
-            .build_no_color(io::stdout()),
+            .build(buffer_writer.buffer()),
     }
 }
 
-fn get_searcher(output_mode: OutputMode) -> Searcher {
+thread_local! {
+    static SEARCHER: OnceCell<(Rc<RefCell<Searcher>>, OutputMode)> = Default::default();
+}
+fn get_searcher(output_mode: OutputMode) -> Rc<RefCell<Searcher>> {
+    SEARCHER.with(|searcher| {
+        let (searcher, output_mode_when_initialized) = searcher.get_or_init(|| {
+            (
+                Rc::new(RefCell::new(create_searcher(output_mode))),
+                output_mode,
+            )
+        });
+        assert!(
+            *output_mode_when_initialized == output_mode,
+            "Using multiple output modes not supported"
+        );
+        searcher.clone()
+    })
+}
+
+fn create_searcher(output_mode: OutputMode) -> Searcher {
     match output_mode {
         OutputMode::Normal => SearcherBuilder::new().multi_line(true).build(),
         OutputMode::Vimgrep => SearcherBuilder::new()
             .multi_line(true)
             .line_number(true)
             .build(),
+    }
+}
+
+fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
+    if is_using_default_paths && path.starts_with("./") {
+        path.strip_prefix("./").unwrap()
+    } else {
+        path
     }
 }
 
@@ -186,16 +253,20 @@ impl Iterator for WalkParallelIterator {
     }
 }
 
-fn get_project_file_walker(language: &dyn SupportedLanguage) -> WalkParallel {
-    WalkBuilder::new(".")
-        .types(
-            TypesBuilder::new()
-                .add_defaults()
-                .select(language.name_for_ignore_select())
-                .build()
-                .unwrap(),
-        )
-        .build_parallel()
+fn get_project_file_walker(language: &dyn SupportedLanguage, paths: &[PathBuf]) -> WalkParallel {
+    assert!(!paths.is_empty());
+    let mut builder = WalkBuilder::new(&paths[0]);
+    builder.types(
+        TypesBuilder::new()
+            .add_defaults()
+            .select(language.name_for_ignore_select())
+            .build()
+            .unwrap(),
+    );
+    for path in &paths[1..] {
+        builder.add(path);
+    }
+    builder.build_parallel()
 }
 
 #[derive(Debug)]
