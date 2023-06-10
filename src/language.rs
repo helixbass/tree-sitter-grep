@@ -7,6 +7,7 @@ use tree_sitter::Language;
 pub enum SupportedLanguageName {
     Rust,
     Typescript,
+    Javascript,
 }
 
 impl SupportedLanguageName {
@@ -14,6 +15,7 @@ impl SupportedLanguageName {
         match self {
             Self::Rust => Box::new(get_rust_language()),
             Self::Typescript => Box::new(get_typescript_language()),
+            Self::Javascript => Box::new(get_javascript_language()),
         }
     }
 }
@@ -73,6 +75,30 @@ pub fn get_typescript_language() -> SupportedLanguageTypescript {
     SupportedLanguageTypescript
 }
 
+pub struct SupportedLanguageJavascript;
+
+impl SupportedLanguage for SupportedLanguageJavascript {
+    fn language(&self) -> Language {
+        tree_sitter_javascript::language()
+    }
+
+    fn name(&self) -> SupportedLanguageName {
+        SupportedLanguageName::Javascript
+    }
+
+    fn name_for_ignore_select(&self) -> &'static str {
+        "js"
+    }
+
+    fn extensions(&self) -> Vec<&'static str> {
+        vec!["js", "jsx", "vue", "cjs", "mjs"]
+    }
+}
+
+pub fn get_javascript_language() -> SupportedLanguageJavascript {
+    SupportedLanguageJavascript
+}
+
 pub fn get_all_supported_languages() -> HashMap<SupportedLanguageName, Box<dyn SupportedLanguage>> {
     HashMap::from_iter([
         (
@@ -82,6 +108,10 @@ pub fn get_all_supported_languages() -> HashMap<SupportedLanguageName, Box<dyn S
         (
             SupportedLanguageName::Typescript,
             Box::new(get_typescript_language()) as Box<dyn SupportedLanguage>,
+        ),
+        (
+            SupportedLanguageName::Javascript,
+            Box::new(get_javascript_language()) as Box<dyn SupportedLanguage>,
         ),
     ])
 }

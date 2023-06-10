@@ -314,3 +314,26 @@ fn test_auto_language_single_known_language_encountered() {
         "#,
     );
 }
+
+#[test]
+fn test_auto_language_multiple_parseable_languages() {
+    assert_sorted_output(
+        "mixed_project",
+        r#"
+            $ tree-sitter-grep --query-source '(arrow_function) @arrow_function'
+            javascript_src/index.js:1:const js_foo = () => {}
+            typescript_src/index.tsx:1:const foo = () => {}
+        "#,
+    );
+}
+
+#[test]
+fn test_auto_language_single_parseable_languages() {
+    assert_sorted_output(
+        "mixed_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item'
+            rust_src/lib.rs:1:fn foo() {}
+        "#,
+    );
+}
