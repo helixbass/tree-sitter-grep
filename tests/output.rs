@@ -227,3 +227,22 @@ fn test_specify_multiple_files() {
         "#,
     );
 }
+
+#[test]
+fn test_auto_language_single_known_language_encountered() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item'
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/stop.rs:1:fn stop_it() {}
+        "#,
+    );
+}

@@ -14,13 +14,17 @@ use once_cell::unsync::OnceCell;
 use rayon::iter::IterBridge;
 use rayon::prelude::*;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::thread::JoinHandle;
 use termcolor::Buffer;
@@ -33,9 +37,12 @@ mod macros;
 mod plugin;
 mod treesitter;
 
-use language::{SupportedLanguage, SupportedLanguageName};
+use language::{
+    get_all_supported_languages, maybe_supported_language_from_path, SupportedLanguage,
+    SupportedLanguageName,
+};
 use plugin::get_loaded_filter;
-use treesitter::{get_matches, get_query};
+use treesitter::{get_matches, maybe_get_query};
 
 #[derive(Parser)]
 pub struct Args {
@@ -45,7 +52,7 @@ pub struct Args {
     #[arg(short, long = "capture")]
     pub capture_name: Option<String>,
     #[arg(short, long, value_enum)]
-    pub language: SupportedLanguageName,
+    pub language: Option<SupportedLanguageName>,
     #[arg(short, long)]
     pub filter: Option<String>,
     #[arg(short = 'a', long)]
@@ -91,25 +98,77 @@ fn get_output_mode(args: &Args) -> OutputMode {
     }
 }
 
+struct MaybeInitializedCaptureIndex(AtomicU32);
+
+impl MaybeInitializedCaptureIndex {
+    fn mark_failed(&self) {
+        self.0.store(u32::MAX - 1, Ordering::Relaxed);
+    }
+
+    pub fn get(&self) -> Result<Option<u32>, ()> {
+        let loaded = self.0.load(Ordering::Relaxed);
+        match loaded {
+            loaded if loaded == u32::MAX => Ok(None),
+            loaded if loaded == u32::MAX - 1 => Err(()),
+            loaded => Ok(Some(loaded)),
+        }
+    }
+
+    pub fn get_or_initialize(&self, query: &Query, capture_name: Option<&str>) -> Result<u32, ()> {
+        if let Some(already_initialized) = self.get()? {
+            return Ok(already_initialized);
+        }
+        let capture_index = match capture_name {
+            None => 0,
+            Some(capture_name) => {
+                let capture_index = query.capture_index_for_name(capture_name);
+                if capture_index.is_none() {
+                    self.mark_failed();
+                    panic!("Unknown capture name: `{}`", capture_name);
+                }
+                capture_index.unwrap()
+            }
+        };
+        self.set(capture_index);
+        Ok(capture_index)
+    }
+
+    fn set(&self, capture_index: u32) {
+        self.0.store(capture_index, Ordering::Relaxed);
+    }
+}
+
+impl Default for MaybeInitializedCaptureIndex {
+    fn default() -> Self {
+        Self(AtomicU32::new(u32::MAX))
+    }
+}
+
 pub fn run(args: Args) {
     let query_source = match args.query_args.path_to_query_file.as_ref() {
         Some(path_to_query_file) => fs::read_to_string(path_to_query_file).unwrap(),
         None => args.query_args.query_source.clone().unwrap(),
     };
-    let supported_language = args.language.get_language();
-    let language = supported_language.language();
-    let query = Arc::new(get_query(&query_source, language));
-    let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
-        query
-            .capture_index_for_name(capture_name)
-            .expect(&format!("Unknown capture name: `{}`", capture_name))
-    });
+    let specified_supported_language = args.language.map(|language| language.get_language());
+    let query_or_failure_by_language: Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>> =
+        Default::default();
+    let capture_index = MaybeInitializedCaptureIndex::default();
     let output_mode = get_output_mode(&args);
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
 
-    get_project_file_walker(&*supported_language, &args.use_paths())
+    get_project_file_walker(specified_supported_language.as_deref(), &args.use_paths())
         .into_parallel_iterator()
         .for_each(|project_file_dir_entry| {
+            let language = maybe_supported_language_from_path(project_file_dir_entry.path())
+                .expect("Walker should've been pre-filtered to just supported file types");
+            let query = return_if_none!(get_and_cache_query_for_language(
+                &query_source,
+                &query_or_failure_by_language,
+                &*language,
+            ));
+            let capture_index = return_if_none!(capture_index
+                .get_or_initialize(&query, args.capture_name.as_deref())
+                .ok());
             let printer = get_printer(&buffer_writer, output_mode);
             let mut printer = printer.borrow_mut();
             let path =
@@ -118,7 +177,7 @@ pub fn run(args: Args) {
             let matcher = TreeSitterMatcher::new(
                 &query,
                 capture_index,
-                language,
+                language.language(),
                 args.filter.clone(),
                 args.filter_arg.clone(),
             );
@@ -129,6 +188,19 @@ pub fn run(args: Args) {
                 .unwrap();
             buffer_writer.print(printer.get_mut()).unwrap();
         });
+}
+
+fn get_and_cache_query_for_language(
+    query_source: &str,
+    query_or_failure_by_language: &Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>>,
+    language: &dyn SupportedLanguage,
+) -> Option<Arc<Query>> {
+    query_or_failure_by_language
+        .lock()
+        .unwrap()
+        .entry(language.name())
+        .or_insert_with(|| maybe_get_query(query_source, language.language()).map(Arc::new))
+        .clone()
 }
 
 type Printer = Standard<Buffer>;
@@ -253,16 +325,22 @@ impl Iterator for WalkParallelIterator {
     }
 }
 
-fn get_project_file_walker(language: &dyn SupportedLanguage, paths: &[PathBuf]) -> WalkParallel {
+fn get_project_file_walker(
+    language: Option<&dyn SupportedLanguage>,
+    paths: &[PathBuf],
+) -> WalkParallel {
     assert!(!paths.is_empty());
     let mut builder = WalkBuilder::new(&paths[0]);
-    builder.types(
-        TypesBuilder::new()
-            .add_defaults()
-            .select(language.name_for_ignore_select())
-            .build()
-            .unwrap(),
-    );
+    let mut types_builder = TypesBuilder::new();
+    types_builder.add_defaults();
+    if let Some(language) = language {
+        types_builder.select(language.name_for_ignore_select());
+    } else {
+        for language in get_all_supported_languages().values() {
+            types_builder.select(language.name_for_ignore_select());
+        }
+    }
+    builder.types(types_builder.build().unwrap());
     for path in &paths[1..] {
         builder.add(path);
     }
