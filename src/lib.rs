@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
@@ -124,7 +125,7 @@ impl MaybeInitializedCaptureIndex {
                 let capture_index = query.capture_index_for_name(capture_name);
                 if capture_index.is_none() {
                     self.mark_failed();
-                    panic!("Unknown capture name: `{}`", capture_name);
+                    fail(&format!("invalid capture name '{}'", capture_name));
                 }
                 capture_index.unwrap()
             }
@@ -188,6 +189,25 @@ pub fn run(args: Args) {
                 .unwrap();
             buffer_writer.print(printer.get_mut()).unwrap();
         });
+
+    error_if_no_successful_query_parsing(&query_or_failure_by_language);
+}
+
+fn error_if_no_successful_query_parsing(
+    query_or_failure_by_language: &Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>>,
+) {
+    let query_or_failure_by_language = query_or_failure_by_language.lock().unwrap();
+    if !query_or_failure_by_language
+        .values()
+        .any(|query| query.is_some())
+    {
+        fail("invalid query");
+    }
+}
+
+fn fail(message: &str) -> ! {
+    eprintln!("error: {message}");
+    process::exit(1);
 }
 
 fn get_and_cache_query_for_language(

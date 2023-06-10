@@ -86,6 +86,25 @@ fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
     actual_lines == expected_lines
 }
 
+fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
+    let CommandAndOutput {
+        mut command_line_args,
+        output,
+    } = parse_command_and_output(command_and_output);
+    let command_name = command_line_args.remove(0);
+    Command::cargo_bin(&command_name)
+        .unwrap()
+        .args(command_line_args)
+        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
+        .assert()
+        .failure()
+        // .stderr(predicate::function(|stderr: &str| {
+        //     println!("stderr: {stderr:#?}, output: {output:#?}");
+        //     stderr == output
+        // }));
+        .stderr(predicate::eq(output));
+}
+
 #[test]
 fn test_query_inline() {
     assert_sorted_output(
@@ -224,6 +243,55 @@ fn test_specify_multiple_files() {
             src/lib.rs:13:        let result = add(2, 2);
             src/lib.rs:14:        assert_eq!(result, 4);
             src/lib.rs:15:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_invalid_query_inline() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_itemz) @function_item' --language rust
+            error: invalid query
+        "#,
+    );
+}
+
+#[test]
+fn test_invalid_query_file() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-file ./function-itemz.scm --language rust
+            error: invalid query
+        "#,
+    );
+}
+
+#[test]
+fn test_no_query_specified() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --language rust
+            error: the following required arguments were not provided:
+              <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>>
+            
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>> [PATHS]...
+            
+            For more information, try '--help'.
+        "#,
+    );
+}
+
+#[test]
+fn test_invalid_capture_name() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --capture function_itemz
+            error: invalid capture name 'function_itemz'
         "#,
     );
 }
