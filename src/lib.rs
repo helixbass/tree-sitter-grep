@@ -1,25 +1,19 @@
+use std::{
+    cell::RefCell,
+    fs, io,
+    path::{Path, PathBuf},
+    sync::{mpsc, mpsc::Receiver, Arc},
+    thread,
+    thread::JoinHandle,
+};
+
 use clap::Parser;
-use grep::matcher::Match;
-use grep::matcher::Matcher;
-use grep::matcher::NoCaptures;
-use grep::matcher::NoError;
-use grep::searcher::Searcher;
-use grep::searcher::SearcherBuilder;
-use ignore::WalkParallel;
-use ignore::WalkState;
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
-use rayon::iter::IterBridge;
-use rayon::prelude::*;
-use std::cell::RefCell;
-use std::fs;
-use std::io;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
+use grep::{
+    matcher::{Match, Matcher, NoCaptures, NoError},
+    searcher::{Searcher, SearcherBuilder},
+};
+use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
+use rayon::{iter::IterBridge, prelude::*};
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -80,7 +74,7 @@ pub fn run(args: Args) {
     let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
         query
             .capture_index_for_name(capture_name)
-            .expect(&format!("Unknown capture name: `{}`", capture_name))
+            .unwrap_or_else(|| panic!("Unknown capture name: `{}`", capture_name))
     });
     let output_mode = get_output_mode(&args);
 
@@ -119,8 +113,6 @@ fn get_printer(output_mode: OutputMode) -> grep::printer::Standard<termcolor::No
             .per_match(true)
             .per_match_one_line(true)
             .column(true)
-            .heading(false)
-            .path(true)
             .build_no_color(io::stdout()),
     }
 }
