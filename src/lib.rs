@@ -1,23 +1,19 @@
+use std::{
+    cell::RefCell,
+    fs, io,
+    path::PathBuf,
+    sync::{mpsc, mpsc::Receiver, Arc},
+    thread,
+    thread::JoinHandle,
+};
+
 use clap::Parser;
-use grep::matcher::Match;
-use grep::matcher::Matcher;
-use grep::matcher::NoCaptures;
-use grep::matcher::NoError;
-use grep::searcher::SearcherBuilder;
-use ignore::WalkParallel;
-use ignore::WalkState;
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
-use rayon::iter::IterBridge;
-use rayon::prelude::*;
-use std::cell::RefCell;
-use std::fs;
-use std::io;
-use std::path::PathBuf;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
+use grep::{
+    matcher::{Match, Matcher, NoCaptures, NoError},
+    searcher::SearcherBuilder,
+};
+use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
+use rayon::{iter::IterBridge, prelude::*};
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -62,7 +58,7 @@ pub fn run(args: Args) {
     let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
         query
             .capture_index_for_name(capture_name)
-            .expect(&format!("Unknown capture name: `{}`", capture_name))
+            .unwrap_or_else(|| panic!("Unknown capture name: `{}`", capture_name))
     });
 
     get_project_file_walker(&*supported_language)
