@@ -11,8 +11,8 @@ pub fn get_parser(language: Language) -> Parser {
     parser
 }
 
-pub fn get_query(source: &str, language: Language) -> Query {
-    Query::new(language, source).unwrap()
+pub fn maybe_get_query(source: &str, language: Language) -> Option<Query> {
+    Query::new(language, source).ok()
 }
 
 pub fn get_matches(

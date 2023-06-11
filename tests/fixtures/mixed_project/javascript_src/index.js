@@ -1,0 +1,1 @@
+const js_foo = () => {}

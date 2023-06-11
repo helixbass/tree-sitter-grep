@@ -5,3 +5,15 @@ macro_rules! regex {
         RE.get_or_init(|| regex::Regex::new($re).unwrap())
     }};
 }
+
+#[macro_export]
+macro_rules! return_if_none {
+    ($expr:expr $(,)?) => {
+        match $expr {
+            None => {
+                return;
+            }
+            Some(expr) => expr,
+        }
+    };
+}
