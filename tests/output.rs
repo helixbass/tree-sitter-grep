@@ -94,14 +94,34 @@ fn test_query_inline() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust
-            ./src/helpers.rs:1:pub fn helper() {}
-            ./src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            ./src/lib.rs:4:    left + right
-            ./src/lib.rs:5:}
-            ./src/lib.rs:12:    fn it_works() {
-            ./src/lib.rs:13:        let result = add(2, 2);
-            ./src/lib.rs:14:        assert_eq!(result, 4);
-            ./src/lib.rs:15:    }
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/stop.rs:1:fn stop_it() {}
+        "#,
+    );
+}
+
+#[test]
+fn test_query_inline_short_option() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @function_item' --language rust
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/stop.rs:1:fn stop_it() {}
         "#,
     );
 }
@@ -115,6 +135,97 @@ fn test_vimgrep_mode() {
             src/helpers.rs:1:1:pub fn helper() {}
             src/lib.rs:3:1:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:12:5:    fn it_works() {
+            src/stop.rs:1:1:fn stop_it() {}
        "#,
+    );
+}
+
+#[test]
+fn test_query_file() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-file ./function-item.scm --language rust
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/stop.rs:1:fn stop_it() {}
+       "#,
+    );
+}
+
+#[test]
+fn test_query_file_short_option() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -Q ./function-item.scm --language rust
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/stop.rs:1:fn stop_it() {}
+       "#,
+    );
+}
+
+#[test]
+fn test_specify_single_file() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust src/lib.rs
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_specify_single_file_preserves_leading_dot_slash() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust ./src/lib.rs
+            ./src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            ./src/lib.rs:4:    left + right
+            ./src/lib.rs:5:}
+            ./src/lib.rs:12:    fn it_works() {
+            ./src/lib.rs:13:        let result = add(2, 2);
+            ./src/lib.rs:14:        assert_eq!(result, 4);
+            ./src/lib.rs:15:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_specify_multiple_files() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust src/lib.rs ./src/helpers.rs
+            ./src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+        "#,
     );
 }
