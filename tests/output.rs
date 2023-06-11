@@ -41,7 +41,7 @@ fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
         .into_iter()
         .map(|line| {
             if line.is_empty() {
-                format!("{line}\n")
+                "\n".to_owned()
             } else {
                 assert!(line.starts_with(indent));
                 format!("{}\n", strip_indent(line, indent))
