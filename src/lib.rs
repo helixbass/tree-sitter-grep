@@ -13,6 +13,7 @@ use std::{
     },
     thread,
     thread::JoinHandle,
+    time::Duration,
 };
 
 use clap::Parser;
@@ -96,15 +97,33 @@ fn get_output_mode(args: &Args) -> OutputMode {
 struct MaybeInitializedCaptureIndex(AtomicU32);
 
 impl MaybeInitializedCaptureIndex {
-    fn mark_failed(&self) {
-        self.0.store(u32::MAX - 1, Ordering::Relaxed);
+    const UNINITIALIZED: u32 = u32::MAX;
+
+    const FAILED: u32 = u32::MAX - 1;
+
+    fn mark_failed(&self) -> bool {
+        loop {
+            let existing_value = self.0.load(Ordering::Relaxed);
+            if existing_value == Self::FAILED {
+                return false;
+            }
+            let did_store = self.0.compare_exchange(
+                existing_value,
+                Self::FAILED,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
+            if did_store.is_ok() {
+                return true;
+            }
+        }
     }
 
     pub fn get(&self) -> Result<Option<u32>, ()> {
         let loaded = self.0.load(Ordering::Relaxed);
         match loaded {
-            loaded if loaded == u32::MAX => Ok(None),
-            loaded if loaded == u32::MAX - 1 => Err(()),
+            loaded if loaded == Self::UNINITIALIZED => Ok(None),
+            loaded if loaded == Self::FAILED => Err(()),
             loaded => Ok(Some(loaded)),
         }
     }
@@ -118,8 +137,14 @@ impl MaybeInitializedCaptureIndex {
             Some(capture_name) => {
                 let capture_index = query.capture_index_for_name(capture_name);
                 if capture_index.is_none() {
-                    self.mark_failed();
-                    fail(&format!("invalid capture name '{}'", capture_name));
+                    let did_mark_failed = self.mark_failed();
+                    if did_mark_failed {
+                        fail(&format!("invalid capture name '{}'", capture_name));
+                    } else {
+                        // whichever other thread "won the race" will have called this fail()
+                        // so we'll be getting killed shortly?
+                        thread::sleep(Duration::from_millis(100_000));
+                    }
                 }
                 capture_index.unwrap()
             }
@@ -135,7 +160,7 @@ impl MaybeInitializedCaptureIndex {
 
 impl Default for MaybeInitializedCaptureIndex {
     fn default() -> Self {
-        Self(AtomicU32::new(u32::MAX))
+        Self(AtomicU32::new(Self::UNINITIALIZED))
     }
 }
 
