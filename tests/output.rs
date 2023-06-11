@@ -1,12 +1,14 @@
-use assert_cmd::prelude::*;
-use once_cell::sync::Lazy;
-use predicates::{prelude::*, BoxPredicate};
+#![allow(clippy::into_iter_on_ref)]
 use std::{
     env,
     ffi::OsStr,
     path::{Path, PathBuf},
     process::Command,
 };
+
+use assert_cmd::prelude::*;
+use once_cell::sync::Lazy;
+use predicates::{prelude::*, BoxPredicate};
 
 struct Location {
     line: usize,
@@ -44,7 +46,7 @@ struct ExpectedMatch {
     pub range: Range,
 }
 
-const MATCH_OUTPUT_LINE_REGEX_STR: &'static str = r#"(^|\n).+:\d+:"#;
+const MATCH_OUTPUT_LINE_REGEX_STR: &str = r#"(^|\n).+:\d+:"#;
 
 fn predicate_from_expected_matches(
     expected_matches: &[ExpectedMatch],
@@ -139,7 +141,7 @@ impl OutputMode {
 }
 
 fn with_leading_dot_slash(relative_path: &str) -> String {
-    if relative_path.starts_with(".") {
+    if relative_path.starts_with('.') {
         relative_path.to_owned()
     } else {
         format!("./{relative_path}")
@@ -182,7 +184,7 @@ fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
     path
 }
 
-const FUNCTION_ITEM_QUERY_SOURCE: &'static str = "(function_item) @function_item";
+const FUNCTION_ITEM_QUERY_SOURCE: &str = "(function_item) @function_item";
 
 static RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES: Lazy<FixtureQueryExpectedMatches> =
     Lazy::new(|| FixtureQueryExpectedMatches {
