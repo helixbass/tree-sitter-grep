@@ -1,36 +1,30 @@
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    process,
+    rc::Rc,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        mpsc,
+        mpsc::Receiver,
+        Arc, Mutex,
+    },
+    thread,
+    thread::JoinHandle,
+};
+
 use clap::Parser;
-use grep::matcher::Match;
-use grep::matcher::Matcher;
-use grep::matcher::NoCaptures;
-use grep::matcher::NoError;
-use grep::printer::Standard;
-use grep::printer::StandardBuilder;
-use grep::searcher::Searcher;
-use grep::searcher::SearcherBuilder;
-use ignore::WalkParallel;
-use ignore::WalkState;
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
+use grep::{
+    matcher::{Match, Matcher, NoCaptures, NoError},
+    printer::{Standard, StandardBuilder},
+    searcher::{Searcher, SearcherBuilder},
+};
+use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
 use once_cell::unsync::OnceCell;
-use rayon::iter::IterBridge;
-use rayon::prelude::*;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process;
-use std::rc::Rc;
-use std::sync::atomic::AtomicU32;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread;
-use std::thread::JoinHandle;
-use termcolor::Buffer;
-use termcolor::BufferWriter;
-use termcolor::ColorChoice;
+use rayon::{iter::IterBridge, prelude::*};
+use termcolor::{Buffer, BufferWriter, ColorChoice};
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -183,6 +177,7 @@ pub fn run(args: Args) {
                 args.filter_arg.clone(),
             );
 
+            printer.get_mut().clear();
             get_searcher(output_mode)
                 .borrow_mut()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
@@ -251,8 +246,6 @@ fn create_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Prin
             .per_match(true)
             .per_match_one_line(true)
             .column(true)
-            .heading(false)
-            .path(true)
             .build(buffer_writer.buffer()),
     }
 }
