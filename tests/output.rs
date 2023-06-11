@@ -37,8 +37,12 @@ fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
     let output: String = lines
         .into_iter()
         .map(|line| {
-            assert!(line.starts_with(indent));
-            format!("{}\n", strip_indent(line, indent))
+            if line.is_empty() {
+                format!("{line}\n")
+            } else {
+                assert!(line.starts_with(indent));
+                format!("{}\n", strip_indent(line, indent))
+            }
         })
         .collect();
     CommandAndOutput {
@@ -292,6 +296,33 @@ fn test_invalid_capture_name() {
         r#"
             $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --capture function_itemz
             error: invalid capture name 'function_itemz'
+        "#,
+    );
+}
+
+#[test]
+fn test_invalid_language_name() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rustz
+            error: invalid value 'rustz' for '--language <LANGUAGE>'
+              [possible values: rust, typescript, javascript]
+
+              tip: a similar value exists: 'rust'
+
+            For more information, try '--help'.
+        "#,
+    );
+}
+
+#[test]
+fn test_invalid_query_file_path() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-file ./nonexistent.scm --language rust
+            error: couldn't read query file: "./nonexistent.scm"
         "#,
     );
 }
