@@ -46,47 +46,32 @@ struct ExpectedMatch {
     pub range: Range,
 }
 
-impl ExpectedMatch {
-    pub fn expected_output_text(&self) -> String {
-        self.lines
-            .iter()
-            .enumerate()
-            .map(|(line_index, line)| {
-                format!(
-                    "{}:{}:{}",
-                    self.relative_file_path,
-                    self.range.start.line + line_index + 1,
-                    line
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-}
-
 const MATCH_OUTPUT_LINE_REGEX_STR: &str = r#"(^|\n).+:\d+:"#;
 
-fn predicate_from_expected_matches(expected_matches: &[ExpectedMatch]) -> BoxPredicate<str> {
+fn predicate_from_expected_matches(
+    expected_matches: &[ExpectedMatch],
+    output_mode: OutputMode,
+) -> BoxPredicate<str> {
     expected_matches.into_iter().fold(
         BoxPredicate::new(
             predicate::str::is_match(MATCH_OUTPUT_LINE_REGEX_STR)
                 .unwrap()
-                .count(
-                    expected_matches
-                        .into_iter()
-                        .map(|expected_match| expected_match.lines.len())
-                        .sum(),
-                ),
+                .count(output_mode.get_expected_total_number_of_match_lines(expected_matches)),
         ),
         |predicate, expected_match| {
-            BoxPredicate::new(predicate.and(predicate_from_expected_match(expected_match)))
+            BoxPredicate::new(
+                predicate.and(predicate_from_expected_match(expected_match, output_mode)),
+            )
         },
     )
 }
 
-fn predicate_from_expected_match(expected_match: &ExpectedMatch) -> BoxPredicate<str> {
+fn predicate_from_expected_match(
+    expected_match: &ExpectedMatch,
+    output_mode: OutputMode,
+) -> BoxPredicate<str> {
     BoxPredicate::new(predicate::str::contains(
-        expected_match.expected_output_text(),
+        output_mode.expected_output_text(expected_match),
     ))
 }
 
@@ -94,6 +79,7 @@ fn assert_expected_matches<TArg: AsRef<OsStr>>(
     args: impl IntoIterator<Item = TArg>,
     current_dir: impl AsRef<Path>,
     expected_matches: &[ExpectedMatch],
+    output_mode: OutputMode,
 ) {
     Command::cargo_bin("tree-sitter-grep")
         .unwrap()
@@ -101,7 +87,65 @@ fn assert_expected_matches<TArg: AsRef<OsStr>>(
         .current_dir(current_dir)
         .assert()
         .success()
-        .stdout(predicate_from_expected_matches(expected_matches));
+        .stdout(predicate_from_expected_matches(
+            expected_matches,
+            output_mode,
+        ));
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum OutputMode {
+    Normal,
+    Vimgrep,
+}
+
+impl OutputMode {
+    pub fn get_expected_total_number_of_match_lines(
+        &self,
+        expected_matches: &[ExpectedMatch],
+    ) -> usize {
+        match self {
+            Self::Normal => expected_matches
+                .into_iter()
+                .map(|expected_match| expected_match.lines.len())
+                .sum(),
+            Self::Vimgrep => expected_matches.len(),
+        }
+    }
+
+    pub fn expected_output_text(&self, expected_match: &ExpectedMatch) -> String {
+        match self {
+            Self::Normal => expected_match
+                .lines
+                .iter()
+                .enumerate()
+                .map(|(line_index, line)| {
+                    format!(
+                        "{}:{}:{}",
+                        with_leading_dot_slash(&expected_match.relative_file_path),
+                        expected_match.range.start.line + line_index + 1,
+                        line
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            Self::Vimgrep => format!(
+                "{}:{}:{}:{}",
+                expected_match.relative_file_path,
+                expected_match.range.start.line + 1,
+                expected_match.range.start.column + 1,
+                &expected_match.lines[0]
+            ),
+        }
+    }
+}
+
+fn with_leading_dot_slash(relative_path: &str) -> String {
+    if relative_path.starts_with('.') {
+        relative_path.to_owned()
+    } else {
+        format!("./{relative_path}")
+    }
 }
 
 struct FixtureQueryExpectedMatches {
@@ -112,16 +156,21 @@ struct FixtureQueryExpectedMatches {
 }
 
 impl FixtureQueryExpectedMatches {
-    pub fn assert_expected_matches(&self) {
+    pub fn assert_expected_matches(&self, output_mode: OutputMode) {
+        let mut args = vec![
+            "--query-source",
+            &self.query_source,
+            "--language",
+            &self.language,
+        ];
+        if output_mode == OutputMode::Vimgrep {
+            args.push("--vimgrep");
+        }
         assert_expected_matches(
-            [
-                "--query-source",
-                &self.query_source,
-                "--language",
-                &self.language,
-            ],
+            args,
             get_fixture_dir_path_from_name(&self.fixture_dir_name),
             &self.expected_matches,
+            output_mode,
         );
     }
 }
@@ -144,12 +193,12 @@ static RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES: Lazy<FixtureQueryExpectedMat
         language: "rust".to_owned(),
         expected_matches: vec![
             ExpectedMatch {
-                relative_file_path: "./src/helpers.rs".to_owned(),
+                relative_file_path: "src/helpers.rs".to_owned(),
                 lines: vec!["pub fn helper() {}".to_owned()],
                 range: ((0, 0), (0, 18)).into(),
             },
             ExpectedMatch {
-                relative_file_path: "./src/lib.rs".to_owned(),
+                relative_file_path: "src/lib.rs".to_owned(),
                 lines: vec![
                     "pub fn add(left: usize, right: usize) -> usize {".to_owned(),
                     "    left + right".to_owned(),
@@ -158,19 +207,24 @@ static RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES: Lazy<FixtureQueryExpectedMat
                 range: ((2, 0), (5, 0)).into(),
             },
             ExpectedMatch {
-                relative_file_path: "./src/lib.rs".to_owned(),
+                relative_file_path: "src/lib.rs".to_owned(),
                 lines: vec![
                     "    fn it_works() {".to_owned(),
                     "        let result = add(2, 2);".to_owned(),
                     "        assert_eq!(result, 4);".to_owned(),
                     "    }".to_owned(),
                 ],
-                range: ((11, 0), (14, 4)).into(),
+                range: ((11, 4), (14, 4)).into(),
             },
         ],
     });
 
 #[test]
 fn test_query_inline() {
-    RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES.assert_expected_matches();
+    RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES.assert_expected_matches(OutputMode::Normal);
+}
+
+#[test]
+fn test_vimgrep_mode() {
+    RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES.assert_expected_matches(OutputMode::Vimgrep);
 }
