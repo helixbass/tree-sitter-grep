@@ -166,7 +166,7 @@ impl Default for MaybeInitializedCaptureIndex {
 pub fn run(args: Args) {
     let query_source = match args.query_args.path_to_query_file.as_ref() {
         Some(path_to_query_file) => fs::read_to_string(path_to_query_file)
-            .unwrap_or_else(|_| fail(&format!("couldn't read query file: {path_to_query_file:?}"))),
+            .unwrap_or_else(|_| fail(&format!("couldn't read query file {path_to_query_file:?}"))),
         None => args.query_args.query_source.clone().unwrap(),
     };
     let specified_supported_language = args.language.map(|language| language.get_language());

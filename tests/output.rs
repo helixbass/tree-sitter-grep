@@ -314,7 +314,7 @@ fn test_invalid_query_file_path() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-file ./nonexistent.scm --language rust
-            error: couldn't read query file: "./nonexistent.scm"
+            error: couldn't read query file "./nonexistent.scm"
         "#,
     );
 }
