@@ -120,7 +120,7 @@ pub fn run(args: Args) {
                 .borrow_mut()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
                 .unwrap();
-            buffer_writer.print(printer.get_mut()).unwrap();
+            // buffer_writer.print(printer.get_mut()).unwrap();
         });
 }
 
