@@ -1,12 +1,13 @@
-use assert_cmd::prelude::*;
-use once_cell::sync::Lazy;
-use predicates::{prelude::*, BoxPredicate};
 use std::{
     env,
     ffi::OsStr,
     path::{Path, PathBuf},
     process::Command,
 };
+
+use assert_cmd::prelude::*;
+use once_cell::sync::Lazy;
+use predicates::{prelude::*, BoxPredicate};
 
 struct Location {
     line: usize,
