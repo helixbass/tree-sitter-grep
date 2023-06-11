@@ -102,7 +102,6 @@ pub fn run(args: Args) {
     get_project_file_walker(&*supported_language, &args.use_paths())
         .into_parallel_iterator()
         .for_each(|project_file_dir_entry| {
-            println!("for_each() file path: {:?}", project_file_dir_entry.path());
             let printer = get_printer(&buffer_writer, output_mode);
             let mut printer = printer.borrow_mut();
             let path =
@@ -314,7 +313,6 @@ impl Matcher for TreeSitterMatcher<'_> {
             }
         });
         let ret = matches_info.find_and_adjust_first_in_range_match(haystack.len(), at);
-        println!("matcher find_at() returning: {ret:?}");
         Ok(ret)
     }
 
