@@ -98,7 +98,6 @@ struct MaybeInitializedCaptureIndex(AtomicU32);
 
 impl MaybeInitializedCaptureIndex {
     const UNINITIALIZED: u32 = u32::MAX;
-
     const FAILED: u32 = u32::MAX - 1;
 
     fn mark_failed(&self) -> bool {
