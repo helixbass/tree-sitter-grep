@@ -116,6 +116,7 @@ pub fn run(args: Args) {
                 args.filter_arg.clone(),
             );
 
+            printer.get_mut().clear();
             get_searcher(output_mode)
                 .borrow_mut()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
