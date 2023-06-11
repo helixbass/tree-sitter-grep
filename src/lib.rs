@@ -1,36 +1,31 @@
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    process,
+    rc::Rc,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        mpsc,
+        mpsc::Receiver,
+        Arc, Mutex,
+    },
+    thread,
+    thread::JoinHandle,
+    time::Duration,
+};
+
 use clap::Parser;
-use grep::matcher::Match;
-use grep::matcher::Matcher;
-use grep::matcher::NoCaptures;
-use grep::matcher::NoError;
-use grep::printer::Standard;
-use grep::printer::StandardBuilder;
-use grep::searcher::Searcher;
-use grep::searcher::SearcherBuilder;
-use ignore::WalkParallel;
-use ignore::WalkState;
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
+use grep::{
+    matcher::{Match, Matcher, NoCaptures, NoError},
+    printer::{Standard, StandardBuilder},
+    searcher::{Searcher, SearcherBuilder},
+};
+use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
 use once_cell::unsync::OnceCell;
-use rayon::iter::IterBridge;
-use rayon::prelude::*;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process;
-use std::rc::Rc;
-use std::sync::atomic::AtomicU32;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread;
-use std::thread::JoinHandle;
-use termcolor::Buffer;
-use termcolor::BufferWriter;
-use termcolor::ColorChoice;
+use rayon::{iter::IterBridge, prelude::*};
+use termcolor::{Buffer, BufferWriter, ColorChoice};
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -102,15 +97,32 @@ fn get_output_mode(args: &Args) -> OutputMode {
 struct MaybeInitializedCaptureIndex(AtomicU32);
 
 impl MaybeInitializedCaptureIndex {
-    fn mark_failed(&self) {
-        self.0.store(u32::MAX - 1, Ordering::Relaxed);
+    const UNINITIALIZED: u32 = u32::MAX;
+    const FAILED: u32 = u32::MAX - 1;
+
+    fn mark_failed(&self) -> bool {
+        loop {
+            let existing_value = self.0.load(Ordering::Relaxed);
+            if existing_value == Self::FAILED {
+                return false;
+            }
+            let did_store = self.0.compare_exchange(
+                existing_value,
+                Self::FAILED,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            );
+            if did_store.is_ok() {
+                return true;
+            }
+        }
     }
 
     pub fn get(&self) -> Result<Option<u32>, ()> {
         let loaded = self.0.load(Ordering::Relaxed);
         match loaded {
-            loaded if loaded == u32::MAX => Ok(None),
-            loaded if loaded == u32::MAX - 1 => Err(()),
+            loaded if loaded == Self::UNINITIALIZED => Ok(None),
+            loaded if loaded == Self::FAILED => Err(()),
             loaded => Ok(Some(loaded)),
         }
     }
@@ -124,8 +136,14 @@ impl MaybeInitializedCaptureIndex {
             Some(capture_name) => {
                 let capture_index = query.capture_index_for_name(capture_name);
                 if capture_index.is_none() {
-                    self.mark_failed();
-                    fail(&format!("invalid capture name '{}'", capture_name));
+                    let did_mark_failed = self.mark_failed();
+                    if did_mark_failed {
+                        fail(&format!("invalid capture name '{}'", capture_name));
+                    } else {
+                        // whichever other thread "won the race" will have called this fail()
+                        // so we'll be getting killed shortly?
+                        thread::sleep(Duration::from_millis(100_000));
+                    }
                 }
                 capture_index.unwrap()
             }
@@ -141,7 +159,7 @@ impl MaybeInitializedCaptureIndex {
 
 impl Default for MaybeInitializedCaptureIndex {
     fn default() -> Self {
-        Self(AtomicU32::new(u32::MAX))
+        Self(AtomicU32::new(Self::UNINITIALIZED))
     }
 }
 
@@ -184,6 +202,7 @@ pub fn run(args: Args) {
                 args.filter_arg.clone(),
             );
 
+            printer.get_mut().clear();
             get_searcher(output_mode)
                 .borrow_mut()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
@@ -252,8 +271,6 @@ fn create_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Prin
             .per_match(true)
             .per_match_one_line(true)
             .column(true)
-            .heading(false)
-            .path(true)
             .build(buffer_writer.buffer()),
     }
 }

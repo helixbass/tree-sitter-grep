@@ -100,7 +100,7 @@ pub fn get_javascript_language() -> SupportedLanguageJavascript {
 }
 
 pub fn get_all_supported_languages() -> HashMap<SupportedLanguageName, Box<dyn SupportedLanguage>> {
-    HashMap::from_iter([
+    [
         (
             SupportedLanguageName::Rust,
             Box::new(get_rust_language()) as Box<dyn SupportedLanguage>,
@@ -113,7 +113,8 @@ pub fn get_all_supported_languages() -> HashMap<SupportedLanguageName, Box<dyn S
             SupportedLanguageName::Javascript,
             Box::new(get_javascript_language()) as Box<dyn SupportedLanguage>,
         ),
-    ])
+    ]
+    .into()
 }
 
 pub fn maybe_supported_language_from_path(path: &Path) -> Option<Box<dyn SupportedLanguage>> {

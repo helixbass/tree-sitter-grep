@@ -1,6 +1,8 @@
+#![allow(clippy::into_iter_on_ref, clippy::collapsible_if)]
+use std::{env, path::PathBuf, process::Command};
+
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
-use std::{env, path::PathBuf, process::Command};
 
 #[macro_export]
 macro_rules! regex {
@@ -20,7 +22,7 @@ fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
 }
 
 fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
-    let mut lines = command_and_output.split("\n").collect::<Vec<_>>();
+    let mut lines = command_and_output.split('\n').collect::<Vec<_>>();
     if lines.is_empty() {
         panic!("Expected at least a command line");
     }
@@ -28,8 +30,8 @@ fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
         lines.remove(0);
     }
     let command_line = lines.remove(0);
-    let indent = regex!(r#"^\s*"#).find(&command_line).unwrap().as_str();
-    let command_line_args = parse_command_line(strip_indent(&command_line, indent));
+    let indent = regex!(r#"^\s*"#).find(command_line).unwrap().as_str();
+    let command_line_args = parse_command_line(strip_indent(command_line, indent));
     if !lines.is_empty() {
         if lines[lines.len() - 1].trim().is_empty() {
             lines.pop();
@@ -62,7 +64,7 @@ fn strip_indent<'line>(line: &'line str, indent: &str) -> &'line str {
 }
 
 fn parse_command_line(command_line: &str) -> Vec<String> {
-    assert!(command_line.starts_with("$"));
+    assert!(command_line.starts_with('$'));
     shlex::split(&command_line[1..]).unwrap()
 }
 
@@ -72,7 +74,7 @@ fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
         output,
     } = parse_command_and_output(command_and_output);
     let command_name = command_line_args.remove(0);
-    Command::cargo_bin(&command_name)
+    Command::cargo_bin(command_name)
         .unwrap()
         .args(command_line_args)
         .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
@@ -84,9 +86,9 @@ fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
 }
 
 fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
-    let mut actual_lines = actual_output.split("\n").collect::<Vec<_>>();
+    let mut actual_lines = actual_output.split('\n').collect::<Vec<_>>();
     actual_lines.sort();
-    let mut expected_lines = expected_output.split("\n").collect::<Vec<_>>();
+    let mut expected_lines = expected_output.split('\n').collect::<Vec<_>>();
     expected_lines.sort();
     actual_lines == expected_lines
 }
@@ -97,7 +99,7 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         output,
     } = parse_command_and_output(command_and_output);
     let command_name = command_line_args.remove(0);
-    Command::cargo_bin(&command_name)
+    Command::cargo_bin(command_name)
         .unwrap()
         .args(command_line_args)
         .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))

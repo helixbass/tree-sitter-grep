@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: ["*"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Update local toolchain
+        run: |
+          rustup update
+          rustup component add clippy
+          rustup toolchain install nightly --allow-downgrade -c rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +nightly fmt -- --check
+      - run: cargo clippy --all-targets --tests -- -D warnings
+      - run: cargo test
+      - run: RUSTDOCFLAGS='--deny warnings' cargo doc --no-deps
