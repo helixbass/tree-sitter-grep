@@ -1,31 +1,23 @@
+use std::{
+    cell::RefCell,
+    fs,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::{mpsc, mpsc::Receiver, Arc},
+    thread,
+    thread::JoinHandle,
+};
+
 use clap::Parser;
-use grep::matcher::Match;
-use grep::matcher::Matcher;
-use grep::matcher::NoCaptures;
-use grep::matcher::NoError;
-use grep::printer::Standard;
-use grep::printer::StandardBuilder;
-use grep::searcher::Searcher;
-use grep::searcher::SearcherBuilder;
-use ignore::WalkParallel;
-use ignore::WalkState;
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder};
+use grep::{
+    matcher::{Match, Matcher, NoCaptures, NoError},
+    printer::{Standard, StandardBuilder},
+    searcher::{Searcher, SearcherBuilder},
+};
+use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
 use once_cell::unsync::OnceCell;
-use rayon::iter::IterBridge;
-use rayon::prelude::*;
-use std::cell::RefCell;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::rc::Rc;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
-use std::thread;
-use std::thread::JoinHandle;
-use termcolor::Buffer;
-use termcolor::BufferWriter;
-use termcolor::ColorChoice;
+use rayon::{iter::IterBridge, prelude::*};
+use termcolor::{Buffer, BufferWriter, ColorChoice};
 use tree_sitter::{Language, Query};
 
 mod language;
@@ -102,7 +94,7 @@ pub fn run(args: Args) {
     let capture_index = args.capture_name.as_ref().map_or(0, |capture_name| {
         query
             .capture_index_for_name(capture_name)
-            .expect(&format!("Unknown capture name: `{}`", capture_name))
+            .unwrap_or_else(|| panic!("Unknown capture name: `{}`", capture_name))
     });
     let output_mode = get_output_mode(&args);
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
@@ -159,8 +151,6 @@ fn create_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Prin
             .per_match(true)
             .per_match_one_line(true)
             .column(true)
-            .heading(false)
-            .path(true)
             .build(buffer_writer.buffer()),
     }
 }
