@@ -1,3 +1,4 @@
+#![allow(clippy::into_iter_on_ref)]
 use std::{
     env,
     ffi::OsStr,
@@ -63,7 +64,7 @@ impl ExpectedMatch {
     }
 }
 
-const MATCH_OUTPUT_LINE_REGEX_STR: &'static str = r#"(^|\n).+:\d+:"#;
+const MATCH_OUTPUT_LINE_REGEX_STR: &str = r#"(^|\n).+:\d+:"#;
 
 fn predicate_from_expected_matches(expected_matches: &[ExpectedMatch]) -> BoxPredicate<str> {
     expected_matches.into_iter().fold(
@@ -134,7 +135,7 @@ fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
     path
 }
 
-const FUNCTION_ITEM_QUERY_SOURCE: &'static str = "(function_item) @function_item";
+const FUNCTION_ITEM_QUERY_SOURCE: &str = "(function_item) @function_item";
 
 static RUST_PROJECT_FUNCTION_ITEM_EXPECTED_MATCHES: Lazy<FixtureQueryExpectedMatches> =
     Lazy::new(|| FixtureQueryExpectedMatches {
