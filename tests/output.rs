@@ -21,16 +21,17 @@ fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
 
 fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
     let mut lines = command_and_output.split("\n").collect::<Vec<_>>();
-    if !lines.is_empty() {
-        if regex!(r#"^\s*$"#).is_match(&lines[0]) {
-            lines.remove(0);
-        }
+    if lines.is_empty() {
+        panic!("Expected at least a command line");
+    }
+    if lines[0].trim().is_empty() {
+        lines.remove(0);
     }
     let command_line = lines.remove(0);
     let indent = regex!(r#"^\s*"#).find(&command_line).unwrap().as_str();
     let command_line_args = parse_command_line(strip_indent(&command_line, indent));
     if !lines.is_empty() {
-        if regex!(r#"^\s*$"#).is_match(&lines[lines.len() - 1]) {
+        if lines[lines.len() - 1].trim().is_empty() {
             lines.pop();
         }
     }
@@ -290,17 +291,6 @@ fn test_no_query_specified() {
 }
 
 #[test]
-fn test_invalid_capture_name() {
-    assert_failure_output(
-        "rust_project",
-        r#"
-            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --capture function_itemz
-            error: invalid capture name 'function_itemz'
-        "#,
-    );
-}
-
-#[test]
 fn test_invalid_language_name() {
     assert_failure_output(
         "rust_project",
@@ -365,6 +355,76 @@ fn test_auto_language_single_parseable_languages() {
         r#"
             $ tree-sitter-grep --query-source '(function_item) @function_item'
             rust_src/lib.rs:1:fn foo() {}
+        "#,
+    );
+}
+
+#[test]
+fn test_capture_name() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item name: (identifier) @name) @function_item' --language rust --capture function_item
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/stop.rs:1:fn stop_it() {}
+        "#,
+    );
+}
+
+#[test]
+fn test_predicate() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item name: (identifier) @name (#eq? @name "add")) @function_item' --language rust --capture function_item
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+        "#,
+    );
+}
+
+#[test]
+fn test_no_matches() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item name: (identifier) @name (#eq? @name "addz")) @function_item' --language rust
+        "#,
+    );
+}
+
+#[test]
+fn test_invalid_capture_name() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --capture function_itemz
+            error: invalid capture name 'function_itemz'
+        "#,
+    );
+}
+
+#[test]
+fn test_unknown_option() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-sourcez '(function_item) @function_item' --language rust
+            error: unexpected argument '--query-sourcez' found
+
+              tip: a similar argument exists: '--query-source'
+
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>> [PATHS]...
+
+            For more information, try '--help'.
         "#,
     );
 }
