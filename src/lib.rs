@@ -312,8 +312,7 @@ impl Matcher for TreeSitterMatcher<'_> {
                 text_len: haystack.len(),
             }
         });
-        let ret = matches_info.find_and_adjust_first_in_range_match(haystack.len(), at);
-        Ok(ret)
+        Ok(matches_info.find_and_adjust_first_in_range_match(haystack.len(), at))
     }
 
     fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
