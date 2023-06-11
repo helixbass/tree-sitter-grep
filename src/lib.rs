@@ -120,7 +120,7 @@ pub fn run(args: Args) {
                 .borrow_mut()
                 .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
                 .unwrap();
-            // buffer_writer.print(printer.get_mut()).unwrap();
+            buffer_writer.print(printer.get_mut()).unwrap();
         });
 }
 
@@ -312,7 +312,9 @@ impl Matcher for TreeSitterMatcher<'_> {
                 text_len: haystack.len(),
             }
         });
-        Ok(matches_info.find_and_adjust_first_in_range_match(haystack.len(), at))
+        let ret = matches_info.find_and_adjust_first_in_range_match(haystack.len(), at);
+        println!("matcher find_at() returning: {ret:?}");
+        Ok(ret)
     }
 
     fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
