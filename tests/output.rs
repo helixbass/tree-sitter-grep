@@ -103,7 +103,7 @@ fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
 
 #[cfg(windows)]
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
-    regex!(r#"^([^:]+):"#).replace(line, |captures: &Captures| captures[1].replace('\\', "/"))
+    regex!(r#"^[^:]+:"#).replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
 
 fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
@@ -129,11 +129,20 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
         .assert()
         .failure()
-        // .stderr(predicate::function(|stderr: &str| {
-        //     println!("stderr: {stderr:#?}, output: {output:#?}");
-        //     stderr == output
-        // }));
-        .stderr(predicate::eq(output));
+        .stderr(predicate::function(|stderr: &str| {
+            let stderr = massage_error_output(stderr);
+            stderr == output
+        }));
+}
+
+#[cfg(unix)]
+fn massage_error_output(output: &str) -> String {
+    output.to_owned()
+}
+
+#[cfg(windows)]
+fn massage_error_output(output: &str) -> String {
+    output.replace(".exe", "")
 }
 
 #[test]
