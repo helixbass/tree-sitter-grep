@@ -92,8 +92,8 @@ fn massage_windows_line(line: &str) -> String {
 #[cfg(windows)]
 fn massage_windows_line(line: &str) -> String {
     let line = strip_trailing_carriage_return(line);
-    let line = normalize_match_path(line);
-    line.to_owned()
+    let line = normalize_match_path(&line);
+    line.into_owned()
 }
 
 #[cfg(windows)]
