@@ -1,8 +1,12 @@
 #![allow(clippy::into_iter_on_ref, clippy::collapsible_if)]
+#[cfg(windows)]
+use std::borrow::Cow;
 use std::{env, path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
+#[cfg(windows)]
+use regex::Captures;
 
 #[macro_export]
 macro_rules! regex {
@@ -80,8 +84,33 @@ fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
         }));
 }
 
+#[cfg(unix)]
+fn massage_windows_line(line: &str) -> String {
+    line.to_owned()
+}
+
+#[cfg(windows)]
+fn massage_windows_line(line: &str) -> String {
+    let line = strip_trailing_carriage_return(line);
+    let line = normalize_match_path(line);
+    line.to_owned()
+}
+
+#[cfg(windows)]
+fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
+    regex!(r#"\r$"#).replace(line, "")
+}
+
+#[cfg(windows)]
+fn normalize_match_path(line: &str) -> Cow<'_, str> {
+    regex!(r#"^([^:]+):"#).replace(line, |captures: &Captures| captures[1].replace('\\', "/"))
+}
+
 fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
-    let mut actual_lines = actual_output.split('\n').collect::<Vec<_>>();
+    let mut actual_lines = actual_output
+        .split('\n')
+        .map(massage_windows_line)
+        .collect::<Vec<_>>();
     actual_lines.sort();
     let mut expected_lines = expected_output.split('\n').collect::<Vec<_>>();
     expected_lines.sort();
