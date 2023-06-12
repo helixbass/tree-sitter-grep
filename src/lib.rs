@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{OnceCell, RefCell},
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
@@ -23,7 +23,6 @@ use grep::{
     searcher::{Searcher, SearcherBuilder},
 };
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
-use once_cell::unsync::OnceCell;
 use rayon::{iter::IterBridge, prelude::*};
 use termcolor::{Buffer, BufferWriter, ColorChoice};
 use tree_sitter::{Language, Query};
