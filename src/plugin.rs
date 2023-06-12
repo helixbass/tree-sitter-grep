@@ -1,10 +1,10 @@
 use std::{
     ffi::{CString, OsStr},
     ptr,
+    sync::OnceLock,
 };
 
 use libloading::Library;
-use once_cell::sync::OnceCell;
 use tree_sitter::Node;
 
 #[cfg(unix)]
@@ -60,7 +60,7 @@ pub fn get_loaded_filter(
     filter_arg: Option<&str>,
 ) -> Option<&'static Filterer> {
     filter_library_path.map(|filter_library_path| {
-        static LOADED_FILTERER: OnceCell<Filterer> = OnceCell::new();
+        static LOADED_FILTERER: OnceLock<Filterer> = OnceLock::new();
         LOADED_FILTERER.get_or_init(|| load_plugin(filter_library_path, filter_arg))
     })
 }
