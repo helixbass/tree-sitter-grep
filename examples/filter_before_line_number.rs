@@ -8,6 +8,7 @@ use tree_sitter::Node;
 
 static ROW_NUMBER: AtomicUsize = AtomicUsize::new(0);
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub extern "C" fn initialize(value: *const c_char) {
     assert!(!value.is_null(), "Expected filter argument");
