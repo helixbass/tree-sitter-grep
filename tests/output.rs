@@ -1,7 +1,5 @@
 #![allow(clippy::into_iter_on_ref, clippy::collapsible_if)]
-#[cfg(windows)]
-use std::borrow::Cow;
-use std::{env, path::PathBuf, process::Command};
+use std::{borrow::Cow, env, path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
@@ -66,20 +64,20 @@ fn strip_indent<'line>(line: &'line str, indent: &str) -> &'line str {
     &line[indent.len()..]
 }
 
-#[cfg(target_os = "macos")]
-const DYNAMIC_LIBRARY_EXTENSION: &str = ".dylib";
-#[cfg(all(unix, not(target_os = "macos")))]
-const DYNAMIC_LIBRARY_EXTENSION: &str = ".so";
-#[cfg(windows)]
-const DYNAMIC_LIBRARY_EXTENSION: &str = ".dll";
+const DYNAMIC_LIBRARY_EXTENSION: &str = if cfg!(target_os = "macos") {
+    ".dylib"
+} else if cfg!(windows) {
+    ".dll"
+} else {
+    ".so"
+};
 
-#[cfg(unix)]
 fn get_dynamic_library_name(library_name: &str) -> String {
-    format!("lib{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
-}
-#[cfg(windows)]
-fn get_dynamic_library_name(library_name: &str) -> String {
-    format!("{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+    if cfg!(windows) {
+        format!("{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+    } else {
+        format!("lib{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+    }
 }
 
 fn parse_command_line(command_line: &str) -> Vec<String> {
@@ -114,24 +112,20 @@ fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
         }));
 }
 
-#[cfg(unix)]
 fn massage_windows_line(line: &str) -> String {
-    line.to_owned()
+    if cfg!(windows) {
+        let line = strip_trailing_carriage_return(line);
+        let line = normalize_match_path(&line);
+        line.into_owned()
+    } else {
+        line.to_owned()
+    }
 }
 
-#[cfg(windows)]
-fn massage_windows_line(line: &str) -> String {
-    let line = strip_trailing_carriage_return(line);
-    let line = normalize_match_path(&line);
-    line.into_owned()
-}
-
-#[cfg(windows)]
 fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
     regex!(r#"\r$"#).replace(line, "")
 }
 
-#[cfg(windows)]
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
     regex!(r#"^[^:]+:"#).replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
@@ -165,14 +159,12 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         }));
 }
 
-#[cfg(unix)]
 fn massage_error_output(output: &str) -> String {
-    output.to_owned()
-}
-
-#[cfg(windows)]
-fn massage_error_output(output: &str) -> String {
-    output.replace(".exe", "")
+    if cfg!(windows) {
+        output.replace(".exe", "")
+    } else {
+        output.to_owned()
+    }
 }
 
 fn build_example(example_name: &str) {
