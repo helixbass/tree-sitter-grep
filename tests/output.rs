@@ -5,7 +5,6 @@ use std::{env, path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
-#[cfg(windows)]
 use regex::Captures;
 
 #[macro_export]
