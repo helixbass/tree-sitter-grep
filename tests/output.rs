@@ -67,9 +67,24 @@ fn strip_indent<'line>(line: &'line str, indent: &str) -> &'line str {
     &line[indent.len()..]
 }
 
+#[cfg(target_os = "macos")]
+const DYNAMIC_LIBRARY_EXTENSION: &str = ".dylib";
+#[cfg(all(unix, not(target_os = "macos")))]
+const DYNAMIC_LIBRARY_EXTENSION: &str = ".so";
+#[cfg(windows)]
+const DYNAMIC_LIBRARY_EXTENSION: &str = ".dll";
+
 fn parse_command_line(command_line: &str) -> Vec<String> {
     assert!(command_line.starts_with('$'));
-    shlex::split(&command_line[1..]).unwrap()
+    shlex::split(&command_line[1..])
+        .unwrap()
+        .iter()
+        .map(|arg| {
+            regex!(r#"\.so$"#)
+                .replace(arg, DYNAMIC_LIBRARY_EXTENSION)
+                .into_owned()
+        })
+        .collect()
 }
 
 fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
@@ -148,6 +163,14 @@ fn massage_error_output(output: &str) -> String {
 #[cfg(windows)]
 fn massage_error_output(output: &str) -> String {
     output.replace(".exe", "")
+}
+
+fn build_example(example_name: &str) {
+    // CargoBuild::new().example(example_name).exec().unwrap();
+    Command::new("cargo")
+        .args(["build", "--example", example_name])
+        .status()
+        .expect("Build example command failed");
 }
 
 #[test]
@@ -465,6 +488,23 @@ fn test_unknown_option() {
             Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>> [PATHS]...
 
             For more information, try '--help'.
+        "#,
+    );
+}
+
+#[test]
+fn test_filter_plugin() {
+    build_example("filter_before_line_10");
+
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_10.so
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/stop.rs:1:fn stop_it() {}
         "#,
     );
 }
