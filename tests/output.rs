@@ -74,14 +74,25 @@ const DYNAMIC_LIBRARY_EXTENSION: &str = ".so";
 #[cfg(windows)]
 const DYNAMIC_LIBRARY_EXTENSION: &str = ".dll";
 
+#[cfg(unix)]
+fn get_dynamic_library_name(library_name: &str) -> String {
+    format!("lib{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+}
+#[cfg(windows)]
+fn get_dynamic_library_name(library_name: &str) -> String {
+    format!("{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+}
+
 fn parse_command_line(command_line: &str) -> Vec<String> {
     assert!(command_line.starts_with('$'));
     shlex::split(&command_line[1..])
         .unwrap()
         .iter()
         .map(|arg| {
-            regex!(r#"\.so$"#)
-                .replace(arg, DYNAMIC_LIBRARY_EXTENSION)
+            regex!(r#"lib(\S+)\.so$"#)
+                .replace(arg, |captures: &Captures| {
+                    get_dynamic_library_name(&captures[1])
+                })
                 .into_owned()
         })
         .collect()
