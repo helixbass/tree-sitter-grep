@@ -524,3 +524,29 @@ fn test_filter_plugin_with_argument() {
         "#,
     );
 }
+
+#[test]
+fn test_filter_plugin_expecting_argument_not_received() {
+    build_example("filter_before_line_number");
+
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_number.so
+            error: plugin expected '--filter-arg <ARGUMENT>'
+        "#,
+    );
+}
+
+#[test]
+fn test_filter_plugin_unparseable_argument() {
+    build_example("filter_before_line_number");
+
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_number.so --filter-arg abc
+            error: plugin couldn't parse argument "abc"
+        "#,
+    );
+}
