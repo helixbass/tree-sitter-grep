@@ -5,10 +5,7 @@ use std::{
 
 use libc::c_char;
 use tree_sitter::Node;
-use tree_sitter_grep::{
-    PluginInitializeReturn, PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE,
-    PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT, PLUGIN_INITIALIZE_SUCCEEDED,
-};
+use tree_sitter_grep::PluginInitializeReturn;
 
 static ROW_NUMBER: AtomicUsize = AtomicUsize::new(0);
 
@@ -16,16 +13,16 @@ static ROW_NUMBER: AtomicUsize = AtomicUsize::new(0);
 #[no_mangle]
 pub extern "C" fn initialize(value: *const c_char) -> PluginInitializeReturn {
     if value.is_null() {
-        return PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT;
+        return PluginInitializeReturn::MissingArgument;
     }
     let value: usize = match unsafe { CStr::from_ptr(value) }.to_str().unwrap().parse() {
         Err(_) => {
-            return PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE;
+            return PluginInitializeReturn::NotParseable;
         }
         Ok(value) => value,
     };
     ROW_NUMBER.store(value, Ordering::Relaxed);
-    PLUGIN_INITIALIZE_SUCCEEDED
+    PluginInitializeReturn::Succeeded
 }
 
 #[no_mangle]

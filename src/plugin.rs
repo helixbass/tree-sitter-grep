@@ -25,10 +25,12 @@ impl Filterer {
     }
 }
 
-pub type PluginInitializeReturn = u32;
-pub const PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE: u32 = 2;
-pub const PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT: u32 = 1;
-pub const PLUGIN_INITIALIZE_SUCCEEDED: u32 = 0;
+#[repr(u8)]
+pub enum PluginInitializeReturn {
+    Succeeded,
+    MissingArgument,
+    NotParseable,
+}
 
 fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Filterer {
     let library =
@@ -50,10 +52,10 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
             )
         };
         match did_initialize {
-            did_initialize if did_initialize == PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT => {
+            PluginInitializeReturn::MissingArgument => {
                 fail("plugin expected '--filter-arg <ARGUMENT>'");
             }
-            did_initialize if did_initialize == PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE => {
+            PluginInitializeReturn::NotParseable => {
                 fail(&format!(
                     "plugin couldn't parse argument {:?}",
                     filter_arg.unwrap()
