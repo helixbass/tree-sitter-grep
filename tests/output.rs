@@ -508,3 +508,17 @@ fn test_filter_plugin() {
         "#,
     );
 }
+
+#[test]
+fn test_filter_plugin_with_argument() {
+    build_example("filter_before_line_number");
+
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_number.so --filter-arg 2
+            src/helpers.rs:1:pub fn helper() {}
+            src/stop.rs:1:fn stop_it() {}
+        "#,
+    );
+}
