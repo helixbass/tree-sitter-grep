@@ -1,11 +1,8 @@
 #![allow(clippy::into_iter_on_ref, clippy::collapsible_if)]
-#[cfg(windows)]
-use std::borrow::Cow;
-use std::{env, path::PathBuf, process::Command};
+use std::{borrow::Cow, env, path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
-#[cfg(windows)]
 use regex::Captures;
 
 #[macro_export]
@@ -67,9 +64,35 @@ fn strip_indent<'line>(line: &'line str, indent: &str) -> &'line str {
     &line[indent.len()..]
 }
 
+const DYNAMIC_LIBRARY_EXTENSION: &str = if cfg!(target_os = "macos") {
+    ".dylib"
+} else if cfg!(windows) {
+    ".dll"
+} else {
+    ".so"
+};
+
+fn get_dynamic_library_name(library_name: &str) -> String {
+    if cfg!(windows) {
+        format!("{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+    } else {
+        format!("lib{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
+    }
+}
+
 fn parse_command_line(command_line: &str) -> Vec<String> {
     assert!(command_line.starts_with('$'));
-    shlex::split(&command_line[1..]).unwrap()
+    shlex::split(&command_line[1..])
+        .unwrap()
+        .iter()
+        .map(|arg| {
+            regex!(r#"lib(\S+)\.so$"#)
+                .replace(arg, |captures: &Captures| {
+                    get_dynamic_library_name(&captures[1])
+                })
+                .into_owned()
+        })
+        .collect()
 }
 
 fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
@@ -89,24 +112,20 @@ fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
         }));
 }
 
-#[cfg(unix)]
 fn massage_windows_line(line: &str) -> String {
-    line.to_owned()
+    if cfg!(windows) {
+        let line = strip_trailing_carriage_return(line);
+        let line = normalize_match_path(&line);
+        line.into_owned()
+    } else {
+        line.to_owned()
+    }
 }
 
-#[cfg(windows)]
-fn massage_windows_line(line: &str) -> String {
-    let line = strip_trailing_carriage_return(line);
-    let line = normalize_match_path(&line);
-    line.into_owned()
-}
-
-#[cfg(windows)]
 fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
     regex!(r#"\r$"#).replace(line, "")
 }
 
-#[cfg(windows)]
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
     regex!(r#"^[^:]+:"#).replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
@@ -140,14 +159,20 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         }));
 }
 
-#[cfg(unix)]
 fn massage_error_output(output: &str) -> String {
-    output.to_owned()
+    if cfg!(windows) {
+        output.replace(".exe", "")
+    } else {
+        output.to_owned()
+    }
 }
 
-#[cfg(windows)]
-fn massage_error_output(output: &str) -> String {
-    output.replace(".exe", "")
+fn build_example(example_name: &str) {
+    // CargoBuild::new().example(example_name).exec().unwrap();
+    Command::new("cargo")
+        .args(["build", "--example", example_name])
+        .status()
+        .expect("Build example command failed");
 }
 
 #[test]
@@ -465,6 +490,37 @@ fn test_unknown_option() {
             Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>> [PATHS]...
 
             For more information, try '--help'.
+        "#,
+    );
+}
+
+#[test]
+fn test_filter_plugin() {
+    build_example("filter_before_line_10");
+
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_10.so
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/stop.rs:1:fn stop_it() {}
+        "#,
+    );
+}
+
+#[test]
+fn test_filter_plugin_with_argument() {
+    build_example("filter_before_line_number");
+
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_number.so --filter-arg 2
+            src/helpers.rs:1:pub fn helper() {}
+            src/stop.rs:1:fn stop_it() {}
         "#,
     );
 }
