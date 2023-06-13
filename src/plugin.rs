@@ -7,6 +7,8 @@ use std::{
 use libloading::Library;
 use tree_sitter::Node;
 
+use crate::fail;
+
 #[cfg(unix)]
 type RawSymbol<TExportedSymbol> = libloading::os::unix::Symbol<TExportedSymbol>;
 #[cfg(windows)]
@@ -23,22 +25,41 @@ impl Filterer {
     }
 }
 
+pub type PluginInitializeReturn = u32;
+pub const PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE: u32 = 2;
+pub const PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT: u32 = 1;
+pub const PLUGIN_INITIALIZE_SUCCEEDED: u32 = 0;
+
 fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Filterer {
     let library =
         unsafe { Library::new(library_path).expect("Couldn't load filter dynamic library") };
 
-    if let Ok(initialize) =
-        unsafe { library.get::<unsafe extern "C" fn(*const libc::c_char)>(b"initialize\0") }
-    {
+    if let Ok(initialize) = unsafe {
+        library.get::<unsafe extern "C" fn(*const libc::c_char) -> PluginInitializeReturn>(
+            b"initialize\0",
+        )
+    } {
         let filter_arg = filter_arg.map(|filter_arg| {
             CString::new(filter_arg).expect("Couldn't convert provided filter arg to CString")
         });
-        unsafe {
+        let did_initialize = unsafe {
             initialize(
                 filter_arg
                     .as_ref()
                     .map_or_else(ptr::null, |filter_arg| filter_arg.as_ptr()),
-            );
+            )
+        };
+        match did_initialize {
+            did_initialize if did_initialize == PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT => {
+                fail("plugin expected '--filter-arg <ARGUMENT>'");
+            }
+            did_initialize if did_initialize == PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE => {
+                fail(&format!(
+                    "plugin couldn't parse argument {:?}",
+                    filter_arg.unwrap()
+                ));
+            }
+            _ => (),
         }
     }
 

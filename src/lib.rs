@@ -37,6 +37,10 @@ use language::{
     SupportedLanguageName,
 };
 use plugin::get_loaded_filter;
+pub use plugin::{
+    PluginInitializeReturn, PLUGIN_INITIALIZE_ARGUMENT_NOT_PARSEABLE,
+    PLUGIN_INITIALIZE_MISSING_EXPECTED_ARGUMENT, PLUGIN_INITIALIZE_SUCCEEDED,
+};
 use treesitter::{get_matches, maybe_get_query};
 
 #[derive(Parser)]
