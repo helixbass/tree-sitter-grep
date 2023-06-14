@@ -159,12 +159,34 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         }));
 }
 
+fn assert_non_match_output(fixture_dir_name: &str, command_and_output: &str) {
+    let CommandAndOutput {
+        mut command_line_args,
+        output,
+    } = parse_command_and_output(command_and_output);
+    let command_name = command_line_args.remove(0);
+    Command::cargo_bin(command_name)
+        .unwrap()
+        .args(command_line_args)
+        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
+        .assert()
+        .success()
+        .stdout(predicate::function(|stdout: &str| {
+            let stdout = massage_error_output(stdout);
+            stdout == output
+        }));
+}
+
 fn massage_error_output(output: &str) -> String {
     if cfg!(windows) {
         output.replace(".exe", "")
     } else {
         output.to_owned()
     }
+    .split('\n')
+    .map(|line| line.trim_end())
+    .collect::<Vec<_>>()
+    .join("\n")
 }
 
 fn build_example(example_name: &str) {
@@ -340,16 +362,16 @@ fn test_invalid_query_file() {
 }
 
 #[test]
-fn test_no_query_specified() {
+fn test_no_query_or_filter_specified() {
     assert_failure_output(
         "rust_project",
         r#"
             $ tree-sitter-grep --language rust
             error: the following required arguments were not provided:
-              <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>>
-            
-            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>> [PATHS]...
-            
+              <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>>
+
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> [PATHS]...
+
             For more information, try '--help'.
         "#,
     );
@@ -487,7 +509,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query-source'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>> [PATHS]...
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep>
 
             For more information, try '--help'.
         "#,
@@ -547,6 +569,62 @@ fn test_filter_plugin_unparseable_argument() {
         r#"
             $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_number.so --filter-arg abc
             error: plugin couldn't parse argument "abc"
+        "#,
+    );
+}
+
+#[test]
+fn test_filter_plugin_no_query() {
+    build_example("filter_function_items_before_line_10");
+
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --language rust --filter ../../../target/debug/examples/libfilter_function_items_before_line_10.so
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/stop.rs:1:fn stop_it() {}
+        "#,
+    );
+}
+
+#[test]
+fn test_query_inline_and_query_file_path() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --query-file ./function-item.scm --language rust
+            error: the argument '--query-source <QUERY_SOURCE>' cannot be used with '--query-file <PATH_TO_QUERY_FILE>'
+
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> [PATHS]...
+
+            For more information, try '--help'.
+        "#,
+    );
+}
+
+#[test]
+fn test_help_option() {
+    assert_non_match_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --help
+            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> [PATHS]...
+
+            Arguments:
+              [PATHS]...
+
+            Options:
+              -Q, --query-file <PATH_TO_QUERY_FILE>
+              -q, --query-source <QUERY_SOURCE>
+              -c, --capture <CAPTURE_NAME>
+              -l, --language <LANGUAGE>              [possible values: rust, typescript, javascript]
+              -f, --filter <FILTER>
+              -a, --filter-arg <FILTER_ARG>
+                  --vimgrep
+              -h, --help                             Print help
         "#,
     );
 }

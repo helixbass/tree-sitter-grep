@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use grep::{
     matcher::{Match, Matcher, NoCaptures, NoError},
     printer::{Standard, StandardBuilder},
@@ -41,17 +41,30 @@ pub use plugin::PluginInitializeReturn;
 use treesitter::{get_matches, maybe_get_query};
 
 #[derive(Parser)]
+#[clap(group(
+    ArgGroup::new("query_or_filter")
+        .multiple(true)
+        .required(true)
+        .args(&["path_to_query_file", "query_source", "filter"])
+))]
 pub struct Args {
     pub paths: Vec<PathBuf>,
-    #[command(flatten)]
-    pub query_args: QueryArgs,
+    // #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source",
+    // required_unless_present_any = ["query_source", "filter"])]
+    #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source")]
+    pub path_to_query_file: Option<PathBuf>,
+    // #[arg(short, long, conflicts_with = "path_to_query_file", required_unless_present_any =
+    // ["path_to_query_file", "filter"])]
+    #[arg(short, long, conflicts_with = "path_to_query_file")]
+    pub query_source: Option<String>,
     #[arg(short, long = "capture")]
     pub capture_name: Option<String>,
     #[arg(short, long, value_enum)]
     pub language: Option<SupportedLanguageName>,
+    // #[arg(short, long, required_unless_present_any = ["path_to_query_file", "query_source"])]
     #[arg(short, long)]
     pub filter: Option<String>,
-    #[arg(short = 'a', long)]
+    #[arg(short = 'a', long, requires = "filter")]
     pub filter_arg: Option<String>,
     #[arg(long)]
     pub vimgrep: bool,
@@ -69,15 +82,6 @@ impl Args {
     pub fn is_using_default_paths(&self) -> bool {
         self.paths.is_empty()
     }
-}
-
-#[derive(clap::Args)]
-#[group(required = true, multiple = false)]
-pub struct QueryArgs {
-    #[arg(short = 'Q', long = "query-file")]
-    pub path_to_query_file: Option<PathBuf>,
-    #[arg(short, long)]
-    pub query_source: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -163,11 +167,15 @@ impl Default for MaybeInitializedCaptureIndex {
     }
 }
 
+const ALL_NODES_QUERY: &str = "(_) @node";
+
 pub fn run(args: Args) {
-    let query_source = match args.query_args.path_to_query_file.as_ref() {
-        Some(path_to_query_file) => fs::read_to_string(path_to_query_file)
+    let query_source = match (args.path_to_query_file.as_ref(), args.query_source.as_ref()) {
+        (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
             .unwrap_or_else(|_| fail(&format!("couldn't read query file {path_to_query_file:?}"))),
-        None => args.query_args.query_source.clone().unwrap(),
+        (None, Some(query_source)) => query_source.clone(),
+        (None, None) => ALL_NODES_QUERY.to_owned(),
+        _ => unreachable!(),
     };
     let specified_supported_language = args.language.map(|language| language.get_language());
     let query_or_failure_by_language: Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>> =
