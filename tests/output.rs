@@ -628,3 +628,19 @@ fn test_help_option() {
         "#,
     );
 }
+
+#[test]
+fn test_no_arguments() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep
+            error: the following required arguments were not provided:
+              <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>>
+
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> [PATHS]...
+
+            For more information, try '--help'.
+        "#,
+    );
+}
