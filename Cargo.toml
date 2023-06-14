@@ -38,3 +38,7 @@ crate-type = ["cdylib"]
 [[example]]
 name = "filter_before_line_10"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "filter_function_items_before_line_10"
+crate-type = ["cdylib"]
