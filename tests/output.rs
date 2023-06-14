@@ -644,3 +644,21 @@ fn test_no_arguments() {
         "#,
     );
 }
+
+#[test]
+fn test_filter_argument_no_filter() {
+    build_example("filter_before_line_number");
+
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(function_item) @function_item' --language rust --filter-arg 2
+            error: the following required arguments were not provided:
+              --filter <FILTER>
+
+            Usage: tree-sitter-grep --language <LANGUAGE> --filter-arg <FILTER_ARG> <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> [PATHS]...
+
+            For more information, try '--help'.
+        "#,
+    );
+}
