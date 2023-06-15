@@ -3,7 +3,7 @@ use tree_sitter::{Language, Parser, Query, QueryCursor};
 
 use crate::plugin::Filterer;
 
-pub fn get_parser(language: Language) -> Parser {
+pub(crate) fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
     parser
         .set_language(language)
@@ -11,11 +11,11 @@ pub fn get_parser(language: Language) -> Parser {
     parser
 }
 
-pub fn maybe_get_query(source: &str, language: Language) -> Option<Query> {
+pub(crate) fn maybe_get_query(source: &str, language: Language) -> Option<Query> {
     Query::new(language, source).ok()
 }
 
-pub fn get_matches(
+pub(crate) fn get_matches(
     query: &Query,
     capture_index: u32,
     file_text_as_bytes: &[u8],
