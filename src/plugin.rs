@@ -14,7 +14,7 @@ type RawSymbol<TExportedSymbol> = libloading::os::unix::Symbol<TExportedSymbol>;
 #[cfg(windows)]
 type RawSymbol<TExportedSymbol> = libloading::os::windows::Symbol<TExportedSymbol>;
 
-pub struct Filterer {
+pub(crate) struct Filterer {
     filterer: RawSymbol<unsafe extern "C" fn(*const Node) -> bool>,
     _library: Library,
 }
@@ -78,7 +78,7 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
     }
 }
 
-pub fn get_loaded_filter(
+pub(crate) fn get_loaded_filter(
     filter_library_path: Option<&str>,
     filter_arg: Option<&str>,
 ) -> Option<&'static Filterer> {

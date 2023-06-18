@@ -1,102 +1,42 @@
 use std::{
-    cell::{OnceCell, RefCell},
     collections::HashMap,
     fs,
-    path::{Path, PathBuf},
+    path::Path,
     process,
-    rc::Rc,
     sync::{
         atomic::{AtomicU32, Ordering},
-        mpsc,
-        mpsc::Receiver,
-        Arc, Mutex,
+        Arc, OnceLock,
     },
     thread,
-    thread::JoinHandle,
     time::Duration,
 };
 
-use clap::{ArgGroup, Parser};
-use grep::{
-    matcher::{Match, Matcher, NoCaptures, NoError},
-    printer::{Standard, StandardBuilder},
-    searcher::{Searcher, SearcherBuilder},
-};
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
-use rayon::{iter::IterBridge, prelude::*};
-use termcolor::{Buffer, BufferWriter, ColorChoice};
-use tree_sitter::{Language, Query};
+use rayon::prelude::*;
+use termcolor::{BufferWriter, ColorChoice};
+use tree_sitter::Query;
 
+mod args;
 mod language;
 mod macros;
+mod matcher;
 mod plugin;
+mod printer;
+mod project_file_walker;
+mod searcher;
 mod treesitter;
 
+pub use args::Args;
+use args::OutputMode;
 use language::{
     get_all_supported_languages, maybe_supported_language_from_path, SupportedLanguage,
     SupportedLanguageName,
 };
-use plugin::get_loaded_filter;
+use matcher::TreeSitterMatcher;
 pub use plugin::PluginInitializeReturn;
-use treesitter::{get_matches, maybe_get_query};
-
-#[derive(Parser)]
-#[clap(group(
-    ArgGroup::new("query_or_filter")
-        .multiple(true)
-        .required(true)
-        .args(&["path_to_query_file", "query_source", "filter"])
-))]
-pub struct Args {
-    pub paths: Vec<PathBuf>,
-    // #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source",
-    // required_unless_present_any = ["query_source", "filter"])]
-    #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source")]
-    pub path_to_query_file: Option<PathBuf>,
-    // #[arg(short, long, conflicts_with = "path_to_query_file", required_unless_present_any =
-    // ["path_to_query_file", "filter"])]
-    #[arg(short, long, conflicts_with = "path_to_query_file")]
-    pub query_source: Option<String>,
-    #[arg(short, long = "capture")]
-    pub capture_name: Option<String>,
-    #[arg(short, long, value_enum)]
-    pub language: Option<SupportedLanguageName>,
-    // #[arg(short, long, required_unless_present_any = ["path_to_query_file", "query_source"])]
-    #[arg(short, long)]
-    pub filter: Option<String>,
-    #[arg(short = 'a', long, requires = "filter")]
-    pub filter_arg: Option<String>,
-    #[arg(long)]
-    pub vimgrep: bool,
-}
-
-impl Args {
-    pub fn use_paths(&self) -> Vec<PathBuf> {
-        if self.paths.is_empty() {
-            vec![Path::new("./").to_owned()]
-        } else {
-            self.paths.clone()
-        }
-    }
-
-    pub fn is_using_default_paths(&self) -> bool {
-        self.paths.is_empty()
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum OutputMode {
-    Normal,
-    Vimgrep,
-}
-
-fn get_output_mode(args: &Args) -> OutputMode {
-    if args.vimgrep {
-        OutputMode::Vimgrep
-    } else {
-        OutputMode::Normal
-    }
-}
+use printer::get_printer;
+use project_file_walker::get_project_file_parallel_iterator;
+use searcher::get_searcher;
+use treesitter::maybe_get_query;
 
 struct MaybeInitializedCaptureIndex(AtomicU32);
 
@@ -169,6 +109,43 @@ impl Default for MaybeInitializedCaptureIndex {
 
 const ALL_NODES_QUERY: &str = "(_) @node";
 
+struct CachedQueries(HashMap<SupportedLanguageName, OnceLock<Option<Arc<Query>>>>);
+
+impl CachedQueries {
+    fn get_and_cache_query_for_language(
+        &self,
+        query_source: &str,
+        language: &dyn SupportedLanguage,
+    ) -> Option<Arc<Query>> {
+        self.0
+            .get(&language.name())
+            .unwrap()
+            .get_or_init(|| maybe_get_query(query_source, language.language()).map(Arc::new))
+            .clone()
+    }
+
+    fn error_if_no_successful_query_parsing(&self) {
+        if !self
+            .0
+            .values()
+            .any(|query| query.get().and_then(|option| option.as_ref()).is_some())
+        {
+            fail("invalid query");
+        }
+    }
+}
+
+impl Default for CachedQueries {
+    fn default() -> Self {
+        Self(
+            get_all_supported_languages()
+                .into_keys()
+                .map(|supported_language_name| (supported_language_name, Default::default()))
+                .collect(),
+        )
+    }
+}
+
 pub fn run(args: Args) {
     let query_source = match (args.path_to_query_file.as_ref(), args.query_source.as_ref()) {
         (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
@@ -178,22 +155,18 @@ pub fn run(args: Args) {
         _ => unreachable!(),
     };
     let specified_supported_language = args.language.map(|language| language.get_language());
-    let query_or_failure_by_language: Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>> =
-        Default::default();
+    let cached_queries: CachedQueries = Default::default();
     let capture_index = MaybeInitializedCaptureIndex::default();
-    let output_mode = get_output_mode(&args);
+    let output_mode = args.output_mode();
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
 
-    get_project_file_walker(specified_supported_language.as_deref(), &args.use_paths())
-        .into_parallel_iterator()
+    get_project_file_parallel_iterator(specified_supported_language.as_deref(), &args.use_paths())
         .for_each(|project_file_dir_entry| {
             let language = maybe_supported_language_from_path(project_file_dir_entry.path())
                 .expect("Walker should've been pre-filtered to just supported file types");
-            let query = return_if_none!(get_and_cache_query_for_language(
-                &query_source,
-                &query_or_failure_by_language,
-                &*language,
-            ));
+            let query = return_if_none!(
+                cached_queries.get_and_cache_query_for_language(&query_source, &*language)
+            );
             let capture_index = return_if_none!(capture_index
                 .get_or_initialize(&query, args.capture_name.as_deref())
                 .ok());
@@ -218,98 +191,12 @@ pub fn run(args: Args) {
             buffer_writer.print(printer.get_mut()).unwrap();
         });
 
-    error_if_no_successful_query_parsing(&query_or_failure_by_language);
-}
-
-fn error_if_no_successful_query_parsing(
-    query_or_failure_by_language: &Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>>,
-) {
-    let query_or_failure_by_language = query_or_failure_by_language.lock().unwrap();
-    if !query_or_failure_by_language
-        .values()
-        .any(|query| query.is_some())
-    {
-        fail("invalid query");
-    }
+    cached_queries.error_if_no_successful_query_parsing();
 }
 
 fn fail(message: &str) -> ! {
     eprintln!("error: {message}");
     process::exit(1);
-}
-
-fn get_and_cache_query_for_language(
-    query_source: &str,
-    query_or_failure_by_language: &Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>>,
-    language: &dyn SupportedLanguage,
-) -> Option<Arc<Query>> {
-    query_or_failure_by_language
-        .lock()
-        .unwrap()
-        .entry(language.name())
-        .or_insert_with(|| maybe_get_query(query_source, language.language()).map(Arc::new))
-        .clone()
-}
-
-type Printer = Standard<Buffer>;
-
-thread_local! {
-    static PRINTER: OnceCell<(Rc<RefCell<Printer>>, OutputMode)> = Default::default();
-}
-fn get_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Rc<RefCell<Printer>> {
-    PRINTER.with(|printer| {
-        let (printer, output_mode_when_initialized) = printer.get_or_init(|| {
-            (
-                Rc::new(RefCell::new(create_printer(buffer_writer, output_mode))),
-                output_mode,
-            )
-        });
-        assert!(
-            *output_mode_when_initialized == output_mode,
-            "Using multiple output modes not supported"
-        );
-        printer.clone()
-    })
-}
-
-fn create_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Printer {
-    match output_mode {
-        OutputMode::Normal => Standard::new(buffer_writer.buffer()),
-        OutputMode::Vimgrep => StandardBuilder::new()
-            .per_match(true)
-            .per_match_one_line(true)
-            .column(true)
-            .build(buffer_writer.buffer()),
-    }
-}
-
-thread_local! {
-    static SEARCHER: OnceCell<(Rc<RefCell<Searcher>>, OutputMode)> = Default::default();
-}
-fn get_searcher(output_mode: OutputMode) -> Rc<RefCell<Searcher>> {
-    SEARCHER.with(|searcher| {
-        let (searcher, output_mode_when_initialized) = searcher.get_or_init(|| {
-            (
-                Rc::new(RefCell::new(create_searcher(output_mode))),
-                output_mode,
-            )
-        });
-        assert!(
-            *output_mode_when_initialized == output_mode,
-            "Using multiple output modes not supported"
-        );
-        searcher.clone()
-    })
-}
-
-fn create_searcher(output_mode: OutputMode) -> Searcher {
-    match output_mode {
-        OutputMode::Normal => SearcherBuilder::new().multi_line(true).build(),
-        OutputMode::Vimgrep => SearcherBuilder::new()
-            .multi_line(true)
-            .line_number(true)
-            .build(),
-    }
 }
 
 fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
@@ -318,169 +205,4 @@ fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
     } else {
         path
     }
-}
-
-trait IntoParallelIterator {
-    fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator>;
-}
-
-impl IntoParallelIterator for WalkParallel {
-    fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator> {
-        WalkParallelIterator::new(self).par_bridge()
-    }
-}
-
-struct WalkParallelIterator {
-    receiver_iterator: <Receiver<DirEntry> as IntoIterator>::IntoIter,
-    _handle: JoinHandle<()>,
-}
-
-impl WalkParallelIterator {
-    pub fn new(walk_parallel: WalkParallel) -> Self {
-        let (sender, receiver) = mpsc::channel::<DirEntry>();
-        let handle = thread::spawn(move || {
-            walk_parallel.run(move || {
-                Box::new({
-                    let sender = sender.clone();
-                    move |entry| {
-                        let entry = match entry {
-                            Err(_) => return WalkState::Continue,
-                            Ok(entry) => entry,
-                        };
-                        if !entry.metadata().unwrap().is_file() {
-                            return WalkState::Continue;
-                        }
-                        sender.send(entry).unwrap();
-                        WalkState::Continue
-                    }
-                })
-            });
-        });
-        Self {
-            receiver_iterator: receiver.into_iter(),
-            _handle: handle,
-        }
-    }
-}
-
-impl Iterator for WalkParallelIterator {
-    type Item = DirEntry;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.receiver_iterator.next()
-    }
-}
-
-fn get_project_file_walker(
-    language: Option<&dyn SupportedLanguage>,
-    paths: &[PathBuf],
-) -> WalkParallel {
-    assert!(!paths.is_empty());
-    let mut builder = WalkBuilder::new(&paths[0]);
-    let mut types_builder = TypesBuilder::new();
-    types_builder.add_defaults();
-    if let Some(language) = language {
-        types_builder.select(language.name_for_ignore_select());
-    } else {
-        for language in get_all_supported_languages().values() {
-            types_builder.select(language.name_for_ignore_select());
-        }
-    }
-    builder.types(types_builder.build().unwrap());
-    for path in &paths[1..] {
-        builder.add(path);
-    }
-    builder.build_parallel()
-}
-
-#[derive(Debug)]
-struct TreeSitterMatcher<'query> {
-    query: &'query Query,
-    capture_index: u32,
-    language: Language,
-    filter_library_path: Option<String>,
-    filter_arg: Option<String>,
-    matches_info: RefCell<Option<PopulatedMatchesInfo>>,
-}
-
-impl<'query> TreeSitterMatcher<'query> {
-    fn new(
-        query: &'query Query,
-        capture_index: u32,
-        language: Language,
-        filter_library_path: Option<String>,
-        filter_arg: Option<String>,
-    ) -> Self {
-        Self {
-            query,
-            capture_index,
-            language,
-            filter_library_path,
-            filter_arg,
-            matches_info: Default::default(),
-        }
-    }
-}
-
-impl Matcher for TreeSitterMatcher<'_> {
-    type Captures = NoCaptures;
-
-    type Error = NoError;
-
-    fn find_at(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error> {
-        let mut matches_info = self.matches_info.borrow_mut();
-        let matches_info = matches_info.get_or_insert_with(|| {
-            assert!(at == 0);
-            PopulatedMatchesInfo {
-                matches: get_matches(
-                    self.query,
-                    self.capture_index,
-                    haystack,
-                    self.language,
-                    get_loaded_filter(
-                        self.filter_library_path.as_deref(),
-                        self.filter_arg.as_deref(),
-                    ),
-                ),
-                text_len: haystack.len(),
-            }
-        });
-        Ok(matches_info.find_and_adjust_first_in_range_match(haystack.len(), at))
-    }
-
-    fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
-        Ok(NoCaptures::new())
-    }
-}
-
-#[derive(Debug)]
-struct PopulatedMatchesInfo {
-    matches: Vec<Match>,
-    text_len: usize,
-}
-
-impl PopulatedMatchesInfo {
-    pub fn find_and_adjust_first_in_range_match(
-        &self,
-        haystack_len: usize,
-        at: usize,
-    ) -> Option<Match> {
-        self.find_first_in_range_match(haystack_len, at)
-            .map(|match_| adjust_match(match_, haystack_len, self.text_len))
-    }
-
-    pub fn find_first_in_range_match(&self, haystack_len: usize, at: usize) -> Option<&Match> {
-        let start_index = at + (self.text_len - haystack_len);
-        self.matches
-            .iter()
-            .find(|match_| match_.start() >= start_index)
-    }
-}
-
-fn adjust_match(match_: &Match, haystack_len: usize, total_file_text_len: usize) -> Match {
-    let offset_in_file = total_file_text_len - haystack_len;
-    Match::new(
-        match_.start() - offset_in_file,
-        match_.end() - offset_in_file,
-    )
 }
