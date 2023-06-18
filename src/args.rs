@@ -13,18 +13,25 @@ use crate::language::SupportedLanguageName;
 ))]
 pub struct Args {
     pub paths: Vec<PathBuf>,
+
     #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source")]
     pub path_to_query_file: Option<PathBuf>,
+
     #[arg(short, long, conflicts_with = "path_to_query_file")]
     pub query_source: Option<String>,
+
     #[arg(short, long = "capture")]
     pub capture_name: Option<String>,
+
     #[arg(short, long, value_enum)]
     pub language: Option<SupportedLanguageName>,
+
     #[arg(short, long)]
     pub filter: Option<String>,
+
     #[arg(short = 'a', long, requires = "filter")]
     pub filter_arg: Option<String>,
+
     #[arg(long)]
     vimgrep: bool,
 }
