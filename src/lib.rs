@@ -5,7 +5,7 @@ use std::{
     process,
     sync::{
         atomic::{AtomicU32, Ordering},
-        Arc, Mutex,
+        Arc, OnceLock,
     },
     thread,
     time::Duration,
@@ -27,7 +27,10 @@ mod treesitter;
 
 pub use args::Args;
 use args::OutputMode;
-use language::{maybe_supported_language_from_path, SupportedLanguage, SupportedLanguageName};
+use language::{
+    get_all_supported_languages, maybe_supported_language_from_path, SupportedLanguage,
+    SupportedLanguageName,
+};
 use matcher::TreeSitterMatcher;
 pub use plugin::PluginInitializeReturn;
 use printer::get_printer;
@@ -106,8 +109,7 @@ impl Default for MaybeInitializedCaptureIndex {
 
 const ALL_NODES_QUERY: &str = "(_) @node";
 
-#[derive(Default)]
-struct CachedQueries(Mutex<HashMap<SupportedLanguageName, Option<Arc<Query>>>>);
+struct CachedQueries(HashMap<SupportedLanguageName, OnceLock<Option<Arc<Query>>>>);
 
 impl CachedQueries {
     fn get_and_cache_query_for_language(
@@ -116,17 +118,31 @@ impl CachedQueries {
         language: &dyn SupportedLanguage,
     ) -> Option<Arc<Query>> {
         self.0
-            .lock()
+            .get(&language.name())
             .unwrap()
-            .entry(language.name())
-            .or_insert_with(|| maybe_get_query(query_source, language.language()).map(Arc::new))
+            .get_or_init(|| maybe_get_query(query_source, language.language()).map(Arc::new))
             .clone()
     }
 
     fn error_if_no_successful_query_parsing(&self) {
-        if !self.0.lock().unwrap().values().any(|query| query.is_some()) {
+        if !self
+            .0
+            .values()
+            .any(|query| query.get().and_then(|option| option.as_ref()).is_some())
+        {
             fail("invalid query");
         }
+    }
+}
+
+impl Default for CachedQueries {
+    fn default() -> Self {
+        Self(
+            get_all_supported_languages()
+                .into_keys()
+                .map(|supported_language_name| (supported_language_name, Default::default()))
+                .collect(),
+        )
     }
 }
 
