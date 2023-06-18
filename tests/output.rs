@@ -662,3 +662,14 @@ fn test_filter_argument_no_filter() {
         "#,
     );
 }
+
+#[test]
+fn test_overlapping_matches() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust
+            whee
+        "#,
+    );
+}
