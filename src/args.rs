@@ -12,7 +12,7 @@ use crate::language::SupportedLanguageName;
         .args(&["path_to_query_file", "query_source", "filter"])
 ))]
 pub struct Args {
-    pub paths: Vec<PathBuf>,
+    paths: Vec<PathBuf>,
 
     #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source")]
     pub path_to_query_file: Option<PathBuf>,
