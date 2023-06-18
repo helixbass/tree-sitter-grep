@@ -26,7 +26,7 @@ pub struct Args {
     #[arg(short = 'a', long, requires = "filter")]
     pub filter_arg: Option<String>,
     #[arg(long)]
-    pub vimgrep: bool,
+    vimgrep: bool,
 }
 
 impl Args {
