@@ -15,7 +15,7 @@ pub(crate) fn maybe_get_query(source: &str, language: Language) -> Option<Query>
     Query::new(language, source).ok()
 }
 
-pub(crate) fn get_matches(
+pub(crate) fn get_sorted_matches(
     query: &Query,
     capture_index: u32,
     file_text_as_bytes: &[u8],
@@ -26,7 +26,7 @@ pub(crate) fn get_matches(
     let file_text =
         std::str::from_utf8(file_text_as_bytes).expect("Expected file text to be valid UTF-8");
     let tree = get_parser(language).parse(file_text, None).unwrap();
-    query_cursor
+    let mut matches = query_cursor
         .matches(query, tree.root_node(), file_text_as_bytes)
         .flat_map(|match_| {
             match_
@@ -39,5 +39,7 @@ pub(crate) fn get_matches(
 
             Match::new(range.start_byte, range.end_byte)
         })
-        .collect()
+        .collect::<Vec<_>>();
+    matches.sort_by_key(|match_| match_.start());
+    matches
 }

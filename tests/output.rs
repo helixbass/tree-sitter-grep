@@ -662,3 +662,15 @@ fn test_filter_argument_no_filter() {
         "#,
     );
 }
+
+#[test]
+fn test_nested_with_captures_in_reverse_order_wrt_outermost_matching_nodes() {
+    assert_sorted_output(
+        "nested_with_captures_in_reverse_order_wrt_outermost_matching_nodes",
+        r#"
+            $ tree-sitter-grep -Q ./query.scm -l rust --vimgrep
+            foo.rs:4:20:        how.whee().why(),
+            foo.rs:6:6:    .why();
+        "#,
+    );
+}

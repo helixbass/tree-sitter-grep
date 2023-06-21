@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use grep::matcher::{Match, Matcher, NoCaptures, NoError};
 use tree_sitter::{Language, Query};
 
-use crate::{plugin::get_loaded_filter, treesitter::get_matches};
+use crate::{plugin::get_loaded_filter, treesitter::get_sorted_matches};
 
 #[derive(Debug)]
 pub(crate) struct TreeSitterMatcher<'query> {
@@ -44,7 +44,7 @@ impl Matcher for TreeSitterMatcher<'_> {
         let matches_info = matches_info.get_or_insert_with(|| {
             assert!(at == 0);
             PopulatedMatchesInfo {
-                matches: get_matches(
+                matches: get_sorted_matches(
                     self.query,
                     self.capture_index,
                     haystack,
