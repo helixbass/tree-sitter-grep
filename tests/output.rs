@@ -664,6 +664,19 @@ fn test_filter_argument_no_filter() {
 }
 
 #[test]
+fn test_macro_contents() {
+    assert_sorted_output(
+        "match_inside_macro",
+        r#"
+            $ tree-sitter-grep -q '(call_expression) @c' -l rust
+            foo.rs:4:        self.factory
+            foo.rs:5:            .create_parameter_declaration("whee", Option::<Gc<NodeArray>>::None)
+            foo.rs:6:            .wrap(),
+        "#,
+    );
+}
+
+#[test]
 fn test_sorting_maybe_nesting_related() {
     assert_sorted_output(
         "sorting_maybe_nesting_related",
