@@ -1,9 +1,5 @@
 use std::{fmt, io, ops, u64};
 
-use interpolate::interpolate;
-
-mod interpolate;
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Match {
     start: usize,
@@ -203,55 +199,6 @@ impl ByteSet {
     }
 }
 
-pub trait Captures {
-    fn len(&self) -> usize;
-
-    fn get(&self, i: usize) -> Option<Match>;
-
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    fn interpolate<F>(
-        &self,
-        name_to_index: F,
-        haystack: &[u8],
-        replacement: &[u8],
-        dst: &mut Vec<u8>,
-    ) where
-        F: FnMut(&str) -> Option<usize>,
-    {
-        interpolate(
-            replacement,
-            |i, dst| {
-                if let Some(range) = self.get(i) {
-                    dst.extend(&haystack[range]);
-                }
-            },
-            name_to_index,
-            dst,
-        )
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct NoCaptures(());
-
-impl NoCaptures {
-    pub fn new() -> NoCaptures {
-        NoCaptures(())
-    }
-}
-
-impl Captures for NoCaptures {
-    fn len(&self) -> usize {
-        0
-    }
-    fn get(&self, _: usize) -> Option<Match> {
-        None
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct NoError(());
 
@@ -280,13 +227,9 @@ pub enum LineMatchKind {
 }
 
 pub trait Matcher {
-    type Captures: Captures;
-
     type Error: fmt::Display;
 
     fn find_at(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error>;
-
-    fn new_captures(&self) -> Result<Self::Captures, Self::Error>;
 
     fn capture_count(&self) -> usize {
         0
@@ -359,149 +302,6 @@ pub trait Matcher {
         }
     }
 
-    fn captures(&self, haystack: &[u8], caps: &mut Self::Captures) -> Result<bool, Self::Error> {
-        self.captures_at(haystack, 0, caps)
-    }
-
-    fn captures_iter<F>(
-        &self,
-        haystack: &[u8],
-        caps: &mut Self::Captures,
-        matched: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> bool,
-    {
-        self.captures_iter_at(haystack, 0, caps, matched)
-    }
-
-    fn captures_iter_at<F>(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-        mut matched: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> bool,
-    {
-        self.try_captures_iter_at(haystack, at, caps, |caps| Ok(matched(caps)))
-            .map(|r: Result<(), ()>| r.unwrap())
-    }
-
-    fn try_captures_iter<F, E>(
-        &self,
-        haystack: &[u8],
-        caps: &mut Self::Captures,
-        matched: F,
-    ) -> Result<Result<(), E>, Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> Result<bool, E>,
-    {
-        self.try_captures_iter_at(haystack, 0, caps, matched)
-    }
-
-    fn try_captures_iter_at<F, E>(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-        mut matched: F,
-    ) -> Result<Result<(), E>, Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> Result<bool, E>,
-    {
-        let mut last_end = at;
-        let mut last_match = None;
-
-        loop {
-            if last_end > haystack.len() {
-                return Ok(Ok(()));
-            }
-            if !self.captures_at(haystack, last_end, caps)? {
-                return Ok(Ok(()));
-            }
-            let m = caps.get(0).unwrap();
-            if m.start == m.end {
-                last_end = m.end + 1;
-                if Some(m.end) == last_match {
-                    continue;
-                }
-            } else {
-                last_end = m.end;
-            }
-            last_match = Some(m.end);
-            match matched(caps) {
-                Ok(true) => continue,
-                Ok(false) => return Ok(Ok(())),
-                Err(err) => return Ok(Err(err)),
-            }
-        }
-    }
-
-    fn captures_at(
-        &self,
-        _haystack: &[u8],
-        _at: usize,
-        _caps: &mut Self::Captures,
-    ) -> Result<bool, Self::Error> {
-        Ok(false)
-    }
-
-    fn replace<F>(
-        &self,
-        haystack: &[u8],
-        dst: &mut Vec<u8>,
-        mut append: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(Match, &mut Vec<u8>) -> bool,
-    {
-        let mut last_match = 0;
-        self.find_iter(haystack, |m| {
-            dst.extend(&haystack[last_match..m.start]);
-            last_match = m.end;
-            append(m, dst)
-        })?;
-        dst.extend(&haystack[last_match..]);
-        Ok(())
-    }
-
-    fn replace_with_captures<F>(
-        &self,
-        haystack: &[u8],
-        caps: &mut Self::Captures,
-        dst: &mut Vec<u8>,
-        append: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures, &mut Vec<u8>) -> bool,
-    {
-        self.replace_with_captures_at(haystack, 0, caps, dst, append)
-    }
-
-    fn replace_with_captures_at<F>(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-        dst: &mut Vec<u8>,
-        mut append: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures, &mut Vec<u8>) -> bool,
-    {
-        let mut last_match = at;
-        self.captures_iter_at(haystack, at, caps, |caps| {
-            let m = caps.get(0).unwrap();
-            dst.extend(&haystack[last_match..m.start]);
-            last_match = m.end;
-            append(caps, dst)
-        })?;
-        dst.extend(&haystack[last_match..]);
-        Ok(())
-    }
-
     fn is_match(&self, haystack: &[u8]) -> Result<bool, Self::Error> {
         self.is_match_at(haystack, 0)
     }
@@ -532,32 +332,10 @@ pub trait Matcher {
 }
 
 impl<'a, M: Matcher> Matcher for &'a M {
-    type Captures = M::Captures;
     type Error = M::Error;
 
     fn find_at(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error> {
         (*self).find_at(haystack, at)
-    }
-
-    fn new_captures(&self) -> Result<Self::Captures, Self::Error> {
-        (*self).new_captures()
-    }
-
-    fn captures_at(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-    ) -> Result<bool, Self::Error> {
-        (*self).captures_at(haystack, at, caps)
-    }
-
-    fn capture_index(&self, name: &str) -> Option<usize> {
-        (*self).capture_index(name)
-    }
-
-    fn capture_count(&self) -> usize {
-        (*self).capture_count()
     }
 
     fn find(&self, haystack: &[u8]) -> Result<Option<Match>, Self::Error> {
@@ -595,94 +373,6 @@ impl<'a, M: Matcher> Matcher for &'a M {
         F: FnMut(Match) -> Result<bool, E>,
     {
         (*self).try_find_iter_at(haystack, at, matched)
-    }
-
-    fn captures(&self, haystack: &[u8], caps: &mut Self::Captures) -> Result<bool, Self::Error> {
-        (*self).captures(haystack, caps)
-    }
-
-    fn captures_iter<F>(
-        &self,
-        haystack: &[u8],
-        caps: &mut Self::Captures,
-        matched: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> bool,
-    {
-        (*self).captures_iter(haystack, caps, matched)
-    }
-
-    fn captures_iter_at<F>(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-        matched: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> bool,
-    {
-        (*self).captures_iter_at(haystack, at, caps, matched)
-    }
-
-    fn try_captures_iter<F, E>(
-        &self,
-        haystack: &[u8],
-        caps: &mut Self::Captures,
-        matched: F,
-    ) -> Result<Result<(), E>, Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> Result<bool, E>,
-    {
-        (*self).try_captures_iter(haystack, caps, matched)
-    }
-
-    fn try_captures_iter_at<F, E>(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-        matched: F,
-    ) -> Result<Result<(), E>, Self::Error>
-    where
-        F: FnMut(&Self::Captures) -> Result<bool, E>,
-    {
-        (*self).try_captures_iter_at(haystack, at, caps, matched)
-    }
-
-    fn replace<F>(&self, haystack: &[u8], dst: &mut Vec<u8>, append: F) -> Result<(), Self::Error>
-    where
-        F: FnMut(Match, &mut Vec<u8>) -> bool,
-    {
-        (*self).replace(haystack, dst, append)
-    }
-
-    fn replace_with_captures<F>(
-        &self,
-        haystack: &[u8],
-        caps: &mut Self::Captures,
-        dst: &mut Vec<u8>,
-        append: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures, &mut Vec<u8>) -> bool,
-    {
-        (*self).replace_with_captures(haystack, caps, dst, append)
-    }
-
-    fn replace_with_captures_at<F>(
-        &self,
-        haystack: &[u8],
-        at: usize,
-        caps: &mut Self::Captures,
-        dst: &mut Vec<u8>,
-        append: F,
-    ) -> Result<(), Self::Error>
-    where
-        F: FnMut(&Self::Captures, &mut Vec<u8>) -> bool,
-    {
-        (*self).replace_with_captures_at(haystack, at, caps, dst, append)
     }
 
     fn is_match(&self, haystack: &[u8]) -> Result<bool, Self::Error> {

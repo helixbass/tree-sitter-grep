@@ -227,7 +227,7 @@ impl Searcher {
         log::trace!("{:?}: reading entire file on to heap for mulitline", path);
         self.fill_multi_line_buffer_from_file::<S>(file)?;
         log::trace!("{:?}: searching via multiline strategy", path);
-        MultiLine::new(self, matcher, &*self.multi_line_buffer.borrow(), write_to).run()
+        MultiLine::new(self, matcher, &self.multi_line_buffer.borrow(), write_to).run()
     }
 
     pub fn search_reader<M, R, S>(
@@ -253,7 +253,7 @@ impl Searcher {
         log::trace!("generic reader: reading everything to heap for multiline");
         self.fill_multi_line_buffer_from_reader::<_, S>(decoder)?;
         log::trace!("generic reader: searching via multiline strategy");
-        MultiLine::new(self, matcher, &*self.multi_line_buffer.borrow(), write_to).run()
+        MultiLine::new(self, matcher, &self.multi_line_buffer.borrow(), write_to).run()
     }
 
     pub fn search_slice<M, S>(

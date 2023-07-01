@@ -14,7 +14,7 @@ use super::{
     color::ColorSpecs,
     counter::CounterWriter,
     stats::Stats,
-    util::{trim_ascii_prefix, trim_line_terminator, PrinterPath, Replacer, Sunk},
+    util::{trim_ascii_prefix, trim_line_terminator, PrinterPath, Sunk},
 };
 use crate::{
     lines::LineStep,
@@ -32,7 +32,6 @@ struct Config {
     only_matching: bool,
     per_match: bool,
     per_match_one_line: bool,
-    replacement: Arc<Option<Vec<u8>>>,
     max_columns: Option<u64>,
     max_columns_preview: bool,
     max_matches: Option<u64>,
@@ -57,7 +56,6 @@ impl Default for Config {
             only_matching: false,
             per_match: false,
             per_match_one_line: false,
-            replacement: Arc::new(None),
             max_columns: None,
             max_columns_preview: false,
             max_matches: None,
@@ -130,11 +128,6 @@ impl StandardBuilder {
 
     pub fn per_match_one_line(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.per_match_one_line = yes;
-        self
-    }
-
-    pub fn replacement(&mut self, replacement: Option<Vec<u8>>) -> &mut StandardBuilder {
-        self.config.replacement = Arc::new(replacement);
         self
     }
 
@@ -229,7 +222,6 @@ impl<W: WriteColor> Standard<W> {
         StandardSink {
             matcher,
             standard: self,
-            replacer: Replacer::new(),
             path: None,
             start_time: Instant::now(),
             match_count: 0,
@@ -261,7 +253,6 @@ impl<W: WriteColor> Standard<W> {
         StandardSink {
             matcher,
             standard: self,
-            replacer: Replacer::new(),
             path: Some(ppath),
             start_time: Instant::now(),
             match_count: 0,
@@ -277,7 +268,6 @@ impl<W: WriteColor> Standard<W> {
 
         (supports_color && match_colored)
             || self.config.column
-            || self.config.replacement.is_some()
             || self.config.per_match
             || self.config.only_matching
             || self.config.stats
@@ -302,7 +292,6 @@ impl<W> Standard<W> {
 pub struct StandardSink<'p, 's, M: Matcher, W> {
     matcher: M,
     standard: &'s mut Standard<W>,
-    replacer: Replacer<M>,
     path: Option<PrinterPath<'p>>,
     start_time: Instant,
     match_count: u64,
@@ -356,24 +345,6 @@ impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
         Ok(())
     }
 
-    fn replace(
-        &mut self,
-        searcher: &Searcher,
-        bytes: &[u8],
-        range: std::ops::Range<usize>,
-    ) -> io::Result<()> {
-        self.replacer.clear();
-        if self.standard.config.replacement.is_some() {
-            let replacement = (*self.standard.config.replacement)
-                .as_ref()
-                .map(|r| &*r)
-                .unwrap();
-            self.replacer
-                .replace_all(searcher, &self.matcher, bytes, range, replacement)?;
-        }
-        Ok(())
-    }
-
     fn should_quit(&self) -> bool {
         let limit = match self.standard.config.max_matches {
             None => return false,
@@ -406,7 +377,6 @@ impl<'p, 's, M: Matcher, W: WriteColor> Sink for StandardSink<'p, 's, M, W> {
         }
 
         self.record_matches(searcher, mat.buffer(), mat.bytes_range_in_buffer())?;
-        self.replace(searcher, mat.buffer(), mat.bytes_range_in_buffer())?;
 
         if let Some(ref mut stats) = self.stats {
             stats.add_matches(self.standard.matches.len() as u64);
@@ -419,14 +389,12 @@ impl<'p, 's, M: Matcher, W: WriteColor> Sink for StandardSink<'p, 's, M, W> {
 
     fn context(&mut self, searcher: &Searcher, ctx: &SinkContext<'_>) -> Result<bool, io::Error> {
         self.standard.matches.clear();
-        self.replacer.clear();
 
         if ctx.kind() == &SinkContextKind::After {
             self.after_context_remaining = self.after_context_remaining.saturating_sub(1);
         }
         if searcher.invert_match() {
             self.record_matches(searcher, ctx.bytes(), 0..ctx.bytes().len())?;
-            self.replace(searcher, ctx.bytes(), 0..ctx.bytes().len())?;
         }
 
         StandardImpl::from_context(searcher, self, ctx).sink()?;
@@ -486,7 +454,7 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
         sink: &'a StandardSink<'_, '_, M, W>,
         mat: &'a SinkMatch<'a>,
     ) -> StandardImpl<'a, M, W> {
-        let sunk = Sunk::from_sink_match(mat, &sink.standard.matches, sink.replacer.replacement());
+        let sunk = Sunk::from_sink_match(mat, &sink.standard.matches);
         StandardImpl {
             sunk,
             ..StandardImpl::new(searcher, sink)
@@ -498,8 +466,7 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
         sink: &'a StandardSink<'_, '_, M, W>,
         ctx: &'a SinkContext<'a>,
     ) -> StandardImpl<'a, M, W> {
-        let sunk =
-            Sunk::from_sink_context(ctx, &sink.standard.matches, sink.replacer.replacement());
+        let sunk = Sunk::from_sink_context(ctx, &sink.standard.matches);
         StandardImpl {
             sunk,
             ..StandardImpl::new(searcher, sink)

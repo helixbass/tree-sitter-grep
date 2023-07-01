@@ -1,111 +1,14 @@
-use std::{borrow::Cow, fmt, io, path::Path, time};
+use std::{borrow::Cow, fmt, path::Path, time};
 
 use bstr::{ByteSlice, ByteVec};
 use serde::{Serialize, Serializer};
 
 use crate::{
     lines::LineIter,
-    matcher::{Captures, LineTerminator, Match, Matcher},
+    matcher::{LineTerminator, Match},
     searcher::Searcher,
-    sink::{SinkContext, SinkContextKind, SinkError, SinkMatch},
+    sink::{SinkContext, SinkContextKind, SinkMatch},
 };
-
-pub struct Replacer<M: Matcher> {
-    space: Option<Space<M>>,
-}
-
-struct Space<M: Matcher> {
-    caps: M::Captures,
-    dst: Vec<u8>,
-    matches: Vec<Match>,
-}
-
-impl<M: Matcher> fmt::Debug for Replacer<M> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (dst, matches) = self.replacement().unwrap_or((&[], &[]));
-        f.debug_struct("Replacer")
-            .field("dst", &dst)
-            .field("matches", &matches)
-            .finish()
-    }
-}
-
-impl<M: Matcher> Replacer<M> {
-    pub fn new() -> Replacer<M> {
-        Replacer { space: None }
-    }
-
-    pub fn replace_all<'a>(
-        &'a mut self,
-        searcher: &Searcher,
-        matcher: &M,
-        mut subject: &[u8],
-        range: std::ops::Range<usize>,
-        replacement: &[u8],
-    ) -> io::Result<()> {
-        todo!();
-        // {
-        //     let &mut Space { ref mut dst, ref mut caps, ref mut matches } =
-        //         self.allocate(matcher)?;
-        //     dst.clear();
-        //     matches.clear();
-
-        //     replace_with_captures_in_context(
-        //         matcher,
-        //         subject,
-        //         range.clone(),
-        //         caps,
-        //         dst,
-        //         |caps, dst| {
-        //             let start = dst.len();
-        //             caps.interpolate(
-        //                 |name| matcher.capture_index(name),
-        //                 subject,
-        //                 replacement,
-        //                 dst,
-        //             );
-        //             let end = dst.len();
-        //             matches.push(Match::new(start, end));
-        //             true
-        //         },
-        //     )
-        //     .map_err(io::Error::error_message)?;
-        // }
-        Ok(())
-    }
-
-    pub fn replacement<'a>(&'a self) -> Option<(&'a [u8], &'a [Match])> {
-        match self.space {
-            None => None,
-            Some(ref space) => {
-                if space.matches.is_empty() {
-                    None
-                } else {
-                    Some((&space.dst, &space.matches))
-                }
-            }
-        }
-    }
-
-    pub fn clear(&mut self) {
-        if let Some(ref mut space) = self.space {
-            space.dst.clear();
-            space.matches.clear();
-        }
-    }
-
-    fn allocate(&mut self, matcher: &M) -> io::Result<&mut Space<M>> {
-        if self.space.is_none() {
-            let caps = matcher.new_captures().map_err(io::Error::error_message)?;
-            self.space = Some(Space {
-                caps,
-                dst: vec![],
-                matches: vec![],
-            });
-        }
-        Ok(self.space.as_mut().unwrap())
-    }
-}
 
 #[derive(Debug)]
 pub struct Sunk<'a> {
@@ -131,12 +34,8 @@ impl<'a> Sunk<'a> {
     }
 
     #[inline]
-    pub fn from_sink_match(
-        sunk: &'a SinkMatch<'a>,
-        original_matches: &'a [Match],
-        replacement: Option<(&'a [u8], &'a [Match])>,
-    ) -> Sunk<'a> {
-        let (bytes, matches) = replacement.unwrap_or_else(|| (sunk.bytes(), original_matches));
+    pub fn from_sink_match(sunk: &'a SinkMatch<'a>, original_matches: &'a [Match]) -> Sunk<'a> {
+        let (bytes, matches) = (sunk.bytes(), original_matches);
         Sunk {
             bytes,
             absolute_byte_offset: sunk.absolute_byte_offset(),
@@ -148,12 +47,8 @@ impl<'a> Sunk<'a> {
     }
 
     #[inline]
-    pub fn from_sink_context(
-        sunk: &'a SinkContext<'a>,
-        original_matches: &'a [Match],
-        replacement: Option<(&'a [u8], &'a [Match])>,
-    ) -> Sunk<'a> {
-        let (bytes, matches) = replacement.unwrap_or_else(|| (sunk.bytes(), original_matches));
+    pub fn from_sink_context(sunk: &'a SinkContext<'a>, original_matches: &'a [Match]) -> Sunk<'a> {
+        let (bytes, matches) = (sunk.bytes(), original_matches);
         Sunk {
             bytes,
             absolute_byte_offset: sunk.absolute_byte_offset(),
