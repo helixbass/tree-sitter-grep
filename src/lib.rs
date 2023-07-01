@@ -25,6 +25,7 @@ mod searcher;
 mod sink;
 mod treesitter;
 mod use_matcher;
+mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
@@ -34,10 +35,10 @@ use language::{
     SupportedLanguageName,
 };
 pub use plugin::PluginInitializeReturn;
-use printer::get_printer;
 use project_file_walker::get_project_file_parallel_iterator;
 use treesitter::maybe_get_query;
 use use_matcher::TreeSitterMatcher;
+use use_printer::get_printer;
 use use_searcher::get_searcher;
 
 #[derive(Default)]
