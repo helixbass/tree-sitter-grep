@@ -687,3 +687,13 @@ fn test_sorting_maybe_nesting_related() {
         "#,
     );
 }
+
+fn test_overlapping_matches() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust
+            whee
+        "#,
+    );
+}
