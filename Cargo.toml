@@ -6,11 +6,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bstr = { version = "1.1.0", default-features = false, features = ["std"] }
+bytecount = "0.6"
 clap = { version = "4.3.0", features = ["derive"] }
+encoding_rs = "0.8.14"
+encoding_rs_io = "0.1.6"
 grep = { git = "https://github.com/helixbass/ripgrep", rev = "b83cc3c" }
 ignore = "0.4.20"
 libc = "0.2.144"
 libloading = "0.8.0"
+log = "0.4.5"
+memchr = "2.1"
+memmap = { package = "memmap2", version = "0.5.3" }
 rayon = "1.7.0"
 regex = "1.8.2"
 termcolor = "1.2.0"
@@ -30,6 +37,9 @@ assert_cmd = "2.0.11"
 escargot = "0.5.7"
 predicates = "3.0.3"
 shlex = "1.1.0"
+
+[features]
+default = ["bytecount/runtime-dispatch-simd"]
 
 [[example]]
 name = "filter_before_line_number"
