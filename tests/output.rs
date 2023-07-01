@@ -688,12 +688,29 @@ fn test_sorting_maybe_nesting_related() {
     );
 }
 
+#[test]
 fn test_overlapping_matches() {
     assert_sorted_output(
         "rust_overlapping",
         r#"
             $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust
-            whee
+            src/lib.rs:2:    let f = || {
+            src/lib.rs:3:        || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    };
+        "#,
+    );
+}
+
+#[test]
+fn test_overlapping_matches_vimgrep() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust --vimgrep
+            src/lib.rs:2:13:    let f = || {
+            src/lib.rs:3:9:        || {
         "#,
     );
 }
