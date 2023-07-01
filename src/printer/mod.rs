@@ -1,5 +1,7 @@
 mod color;
 mod counter;
-pub mod standard;
+mod standard;
 mod stats;
 mod util;
+
+pub use standard::{Standard, StandardBuilder};

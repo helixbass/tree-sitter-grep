@@ -231,14 +231,6 @@ pub trait Matcher {
 
     fn find_at(&self, haystack: &[u8], at: usize) -> Result<Option<Match>, Self::Error>;
 
-    fn capture_count(&self) -> usize {
-        0
-    }
-
-    fn capture_index(&self, _name: &str) -> Option<usize> {
-        None
-    }
-
     fn find(&self, haystack: &[u8]) -> Result<Option<Match>, Self::Error> {
         self.find_at(haystack, 0)
     }

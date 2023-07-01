@@ -1,18 +1,14 @@
-use std::cmp;
-
-use bstr::ByteSlice;
-
 use crate::{
     lines::{self, LineStep},
-    matcher::{LineMatchKind, Matcher},
     searcher::{Config, Range, Searcher},
     sink::{Sink, SinkContext, SinkContextKind, SinkError, SinkFinish, SinkMatch},
+    use_matcher::QueryContext,
 };
 
 #[derive(Debug)]
-pub struct Core<'s, M: 's, S> {
+pub struct Core<'s, S> {
     config: &'s Config,
-    matcher: M,
+    query_context: QueryContext,
     searcher: &'s Searcher,
     sink: S,
     pos: usize,
@@ -24,8 +20,8 @@ pub struct Core<'s, M: 's, S> {
     has_sunk: bool,
 }
 
-impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
-    pub fn new(searcher: &'s Searcher, matcher: M, sink: S) -> Core<'s, M, S> {
+impl<'s, S: Sink> Core<'s, S> {
+    pub fn new(searcher: &'s Searcher, query_context: QueryContext, sink: S) -> Core<'s, S> {
         let line_number = if searcher.config.line_number {
             Some(1)
         } else {
@@ -33,7 +29,7 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
         };
         Core {
             config: &searcher.config,
-            matcher,
+            query_context,
             searcher,
             sink,
             pos: 0,
@@ -54,8 +50,8 @@ impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
         self.pos = pos;
     }
 
-    pub fn matcher(&self) -> &M {
-        &self.matcher
+    pub fn query_context(&self) -> &QueryContext {
+        &self.query_context
     }
 
     pub fn matched(&mut self, buf: &[u8], range: &Range) -> Result<bool, S::Error> {

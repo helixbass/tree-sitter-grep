@@ -37,7 +37,7 @@ use language::{
 pub use plugin::PluginInitializeReturn;
 use project_file_walker::get_project_file_parallel_iterator;
 use treesitter::maybe_get_query;
-use use_matcher::TreeSitterMatcher;
+use use_matcher::QueryContext;
 use use_printer::get_printer;
 use use_searcher::get_searcher;
 
@@ -133,8 +133,8 @@ pub fn run(args: Args) {
             let path =
                 format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
 
-            let matcher = TreeSitterMatcher::new(
-                &query,
+            let query_context = QueryContext::new(
+                query,
                 capture_index,
                 language.language(),
                 args.filter.clone(),
@@ -144,7 +144,7 @@ pub fn run(args: Args) {
             printer.get_mut().clear();
             get_searcher(output_mode)
                 .borrow_mut()
-                .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
+                .search_path(query_context, path, printer.sink_with_path(path))
                 .unwrap();
             buffer_writer.print(printer.get_mut()).unwrap();
         });

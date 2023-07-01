@@ -18,7 +18,7 @@ use super::{
 };
 use crate::{
     lines::LineStep,
-    matcher::{Match, Matcher},
+    matcher::Match,
     searcher::Searcher,
     sink::{Sink, SinkContext, SinkContextKind, SinkFinish, SinkMatch},
 };
@@ -212,7 +212,7 @@ impl<W: io::Write> Standard<NoColor<W>> {
 }
 
 impl<W: WriteColor> Standard<W> {
-    pub fn sink<'s, M: Matcher>(&'s mut self, matcher: M) -> StandardSink<'static, 's, M, W> {
+    pub fn sink<'s>(&'s mut self) -> StandardSink<'static, 's, W> {
         let stats = if self.config.stats {
             Some(Stats::new())
         } else {
@@ -220,7 +220,6 @@ impl<W: WriteColor> Standard<W> {
         };
         let needs_match_granularity = self.needs_match_granularity();
         StandardSink {
-            matcher,
             standard: self,
             path: None,
             start_time: Instant::now(),
@@ -231,17 +230,12 @@ impl<W: WriteColor> Standard<W> {
         }
     }
 
-    pub fn sink_with_path<'p, 's, M, P>(
-        &'s mut self,
-        matcher: M,
-        path: &'p P,
-    ) -> StandardSink<'p, 's, M, W>
+    pub fn sink_with_path<'p, 's, P>(&'s mut self, path: &'p P) -> StandardSink<'p, 's, W>
     where
-        M: Matcher,
         P: ?Sized + AsRef<Path>,
     {
         if !self.config.path {
-            return self.sink(matcher);
+            return self.sink();
         }
         let stats = if self.config.stats {
             Some(Stats::new())
@@ -251,7 +245,6 @@ impl<W: WriteColor> Standard<W> {
         let ppath = PrinterPath::with_separator(path.as_ref(), self.config.separator_path);
         let needs_match_granularity = self.needs_match_granularity();
         StandardSink {
-            matcher,
             standard: self,
             path: Some(ppath),
             start_time: Instant::now(),
@@ -289,8 +282,7 @@ impl<W> Standard<W> {
 }
 
 #[derive(Debug)]
-pub struct StandardSink<'p, 's, M: Matcher, W> {
-    matcher: M,
+pub struct StandardSink<'p, 's, W> {
     standard: &'s mut Standard<W>,
     path: Option<PrinterPath<'p>>,
     start_time: Instant,
@@ -300,7 +292,7 @@ pub struct StandardSink<'p, 's, M: Matcher, W> {
     needs_match_granularity: bool,
 }
 
-impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
+impl<'p, 's, W: WriteColor> StandardSink<'p, 's, W> {
     pub fn has_match(&self) -> bool {
         self.match_count > 0
     }
@@ -365,7 +357,7 @@ impl<'p, 's, M: Matcher, W: WriteColor> StandardSink<'p, 's, M, W> {
     }
 }
 
-impl<'p, 's, M: Matcher, W: WriteColor> Sink for StandardSink<'p, 's, M, W> {
+impl<'p, 's, W: WriteColor> Sink for StandardSink<'p, 's, W> {
     type Error = io::Error;
 
     fn matched(&mut self, searcher: &Searcher, mat: &SinkMatch<'_>) -> Result<bool, io::Error> {
@@ -432,15 +424,15 @@ impl<'p, 's, M: Matcher, W: WriteColor> Sink for StandardSink<'p, 's, M, W> {
 }
 
 #[derive(Debug)]
-struct StandardImpl<'a, M: Matcher, W> {
+struct StandardImpl<'a, W> {
     searcher: &'a Searcher,
-    sink: &'a StandardSink<'a, 'a, M, W>,
+    sink: &'a StandardSink<'a, 'a, W>,
     sunk: Sunk<'a>,
     in_color_match: Cell<bool>,
 }
 
-impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
-    fn new(searcher: &'a Searcher, sink: &'a StandardSink<'_, '_, M, W>) -> StandardImpl<'a, M, W> {
+impl<'a, W: WriteColor> StandardImpl<'a, W> {
+    fn new(searcher: &'a Searcher, sink: &'a StandardSink<'_, '_, W>) -> StandardImpl<'a, W> {
         StandardImpl {
             searcher,
             sink,
@@ -451,9 +443,9 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
 
     fn from_match(
         searcher: &'a Searcher,
-        sink: &'a StandardSink<'_, '_, M, W>,
+        sink: &'a StandardSink<'_, '_, W>,
         mat: &'a SinkMatch<'a>,
-    ) -> StandardImpl<'a, M, W> {
+    ) -> StandardImpl<'a, W> {
         let sunk = Sunk::from_sink_match(mat, &sink.standard.matches);
         StandardImpl {
             sunk,
@@ -463,9 +455,9 @@ impl<'a, M: Matcher, W: WriteColor> StandardImpl<'a, M, W> {
 
     fn from_context(
         searcher: &'a Searcher,
-        sink: &'a StandardSink<'_, '_, M, W>,
+        sink: &'a StandardSink<'_, '_, W>,
         ctx: &'a SinkContext<'a>,
-    ) -> StandardImpl<'a, M, W> {
+    ) -> StandardImpl<'a, W> {
         let sunk = Sunk::from_sink_context(ctx, &sink.standard.matches);
         StandardImpl {
             sunk,

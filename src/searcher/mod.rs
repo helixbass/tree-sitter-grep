@@ -15,6 +15,7 @@ use crate::{
     matcher::{LineTerminator, Match, Matcher},
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
+    use_matcher::QueryContext,
 };
 
 mod core;
@@ -185,64 +186,70 @@ impl Searcher {
         SearcherBuilder::new().build()
     }
 
-    pub fn search_path<P, M, S>(&mut self, matcher: M, path: P, write_to: S) -> Result<(), S::Error>
+    pub fn search_path<P, S>(
+        &mut self,
+        query_context: QueryContext,
+        path: P,
+        write_to: S,
+    ) -> Result<(), S::Error>
     where
         P: AsRef<Path>,
-        M: Matcher,
         S: Sink,
     {
         let path = path.as_ref();
         let file = File::open(path).map_err(S::Error::error_io)?;
-        self.search_file_maybe_path(matcher, Some(path), &file, write_to)
+        self.search_file_maybe_path(query_context, Some(path), &file, write_to)
     }
 
-    pub fn search_file<M, S>(
+    pub fn search_file<S>(
         &mut self,
-        matcher: M,
+        query_context: QueryContext,
         file: &File,
         write_to: S,
     ) -> Result<(), S::Error>
     where
-        M: Matcher,
         S: Sink,
     {
-        self.search_file_maybe_path(matcher, None, file, write_to)
+        self.search_file_maybe_path(query_context, None, file, write_to)
     }
 
-    fn search_file_maybe_path<M, S>(
+    fn search_file_maybe_path<S>(
         &mut self,
-        matcher: M,
+        query_context: QueryContext,
         path: Option<&Path>,
         file: &File,
         write_to: S,
     ) -> Result<(), S::Error>
     where
-        M: Matcher,
         S: Sink,
     {
         if let Some(mmap) = self.config.mmap.open(file, path) {
             log::trace!("{:?}: searching via memory map", path);
-            return self.search_slice(matcher, &mmap, write_to);
+            return self.search_slice(query_context, &mmap, write_to);
         }
         log::trace!("{:?}: reading entire file on to heap for mulitline", path);
         self.fill_multi_line_buffer_from_file::<S>(file)?;
         log::trace!("{:?}: searching via multiline strategy", path);
-        MultiLine::new(self, matcher, &self.multi_line_buffer.borrow(), write_to).run()
+        MultiLine::new(
+            self,
+            query_context,
+            &self.multi_line_buffer.borrow(),
+            write_to,
+        )
+        .run()
     }
 
-    pub fn search_reader<M, R, S>(
+    pub fn search_reader<R, S>(
         &mut self,
-        matcher: M,
+        query_context: QueryContext,
         read_from: R,
         write_to: S,
     ) -> Result<(), S::Error>
     where
-        M: Matcher,
         R: io::Read,
         S: Sink,
     {
-        self.check_config(&matcher)
-            .map_err(S::Error::error_config)?;
+        self.check_config().map_err(S::Error::error_config)?;
 
         let mut decode_buffer = self.decode_buffer.borrow_mut();
         let decoder = self
@@ -253,39 +260,33 @@ impl Searcher {
         log::trace!("generic reader: reading everything to heap for multiline");
         self.fill_multi_line_buffer_from_reader::<_, S>(decoder)?;
         log::trace!("generic reader: searching via multiline strategy");
-        MultiLine::new(self, matcher, &self.multi_line_buffer.borrow(), write_to).run()
+        MultiLine::new(
+            self,
+            query_context,
+            &self.multi_line_buffer.borrow(),
+            write_to,
+        )
+        .run()
     }
 
-    pub fn search_slice<M, S>(
+    pub fn search_slice<S>(
         &mut self,
-        matcher: M,
+        query_context: QueryContext,
         slice: &[u8],
         write_to: S,
     ) -> Result<(), S::Error>
     where
-        M: Matcher,
         S: Sink,
     {
-        self.check_config(&matcher)
-            .map_err(S::Error::error_config)?;
+        self.check_config().map_err(S::Error::error_config)?;
 
         log::trace!("slice reader: searching via multiline strategy");
-        MultiLine::new(self, matcher, slice, write_to).run()
+        MultiLine::new(self, query_context, slice, write_to).run()
     }
 
-    fn check_config<M: Matcher>(&self, matcher: M) -> Result<(), ConfigError> {
+    fn check_config(&self) -> Result<(), ConfigError> {
         if self.config.heap_limit == Some(0) && !self.config.mmap.is_enabled() {
             return Err(ConfigError::SearchUnavailable);
-        }
-        let matcher_line_term = match matcher.line_terminator() {
-            None => return Ok(()),
-            Some(line_term) => line_term,
-        };
-        if matcher_line_term != self.config.line_term {
-            return Err(ConfigError::MismatchedLineTerminators {
-                matcher: matcher_line_term,
-                searcher: self.config.line_term,
-            });
         }
         Ok(())
     }
