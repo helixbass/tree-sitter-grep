@@ -3,10 +3,10 @@ use tree_sitter::{Node, QueryCursor};
 use crate::{
     lines::{self, LineStep},
     plugin::get_loaded_filter,
+    query_context::QueryContext,
     searcher::{core::Core, Config, Range, Searcher},
-    sink::{Sink, SinkError},
+    sink::Sink,
     treesitter::{get_parser, node_to_match},
-    use_matcher::QueryContext,
 };
 
 #[derive(Debug)]

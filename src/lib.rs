@@ -21,10 +21,10 @@ mod matcher;
 mod plugin;
 mod printer;
 mod project_file_walker;
+mod query_context;
 mod searcher;
 mod sink;
 mod treesitter;
-mod use_matcher;
 mod use_printer;
 mod use_searcher;
 
@@ -36,8 +36,8 @@ use language::{
 };
 pub use plugin::PluginInitializeReturn;
 use project_file_walker::get_project_file_parallel_iterator;
+use query_context::QueryContext;
 use treesitter::maybe_get_query;
-use use_matcher::QueryContext;
 use use_printer::get_printer;
 use use_searcher::get_searcher;
 

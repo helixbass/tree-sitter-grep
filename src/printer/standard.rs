@@ -409,7 +409,7 @@ impl<'p, 's, W: WriteColor> Sink for StandardSink<'p, 's, W> {
         Ok(true)
     }
 
-    fn finish(&mut self, searcher: &Searcher, finish: &SinkFinish) -> Result<(), io::Error> {
+    fn finish(&mut self, _searcher: &Searcher, finish: &SinkFinish) -> Result<(), io::Error> {
         if let Some(stats) = self.stats.as_mut() {
             stats.add_elapsed(self.start_time.elapsed());
             stats.add_searches(1);

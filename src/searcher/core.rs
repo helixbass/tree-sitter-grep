@@ -1,8 +1,8 @@
 use crate::{
     lines::{self, LineStep},
+    query_context::QueryContext,
     searcher::{Config, Range, Searcher},
-    sink::{Sink, SinkContext, SinkContextKind, SinkError, SinkFinish, SinkMatch},
-    use_matcher::QueryContext,
+    sink::{Sink, SinkContext, SinkContextKind, SinkFinish, SinkMatch},
 };
 
 #[derive(Debug)]
@@ -59,11 +59,11 @@ impl<'s, S: Sink> Core<'s, S> {
     }
 
     pub fn begin(&mut self) -> Result<bool, S::Error> {
-        self.sink.begin(&self.searcher)
+        self.sink.begin(self.searcher)
     }
 
     pub fn finish(&mut self, byte_count: u64) -> Result<(), S::Error> {
-        self.sink.finish(&self.searcher, &SinkFinish { byte_count })
+        self.sink.finish(self.searcher, &SinkFinish { byte_count })
     }
 
     pub fn before_context_by_line(&mut self, buf: &[u8], upto: usize) -> Result<bool, S::Error> {
@@ -134,7 +134,7 @@ impl<'s, S: Sink> Core<'s, S> {
         let offset = self.absolute_byte_offset + range.start() as u64;
         let linebuf = &buf[*range];
         let keepgoing = self.sink.matched(
-            &self.searcher,
+            self.searcher,
             &SinkMatch {
                 line_term: self.config.line_term,
                 bytes: linebuf,
@@ -157,7 +157,7 @@ impl<'s, S: Sink> Core<'s, S> {
         self.count_lines(buf, range.start());
         let offset = self.absolute_byte_offset + range.start() as u64;
         let keepgoing = self.sink.context(
-            &self.searcher,
+            self.searcher,
             &SinkContext {
                 #[cfg(test)]
                 line_term: self.config.line_term,
@@ -181,7 +181,7 @@ impl<'s, S: Sink> Core<'s, S> {
         self.count_lines(buf, range.start());
         let offset = self.absolute_byte_offset + range.start() as u64;
         let keepgoing = self.sink.context(
-            &self.searcher,
+            self.searcher,
             &SinkContext {
                 #[cfg(test)]
                 line_term: self.config.line_term,
@@ -204,7 +204,7 @@ impl<'s, S: Sink> Core<'s, S> {
         self.count_lines(buf, range.start());
         let offset = self.absolute_byte_offset + range.start() as u64;
         let keepgoing = self.sink.context(
-            &self.searcher,
+            self.searcher,
             &SinkContext {
                 #[cfg(test)]
                 line_term: self.config.line_term,
@@ -229,7 +229,7 @@ impl<'s, S: Sink> Core<'s, S> {
         if !any_context || !self.has_sunk || !is_gap {
             Ok(true)
         } else {
-            self.sink.context_break(&self.searcher)
+            self.sink.context_break(self.searcher)
         }
     }
 

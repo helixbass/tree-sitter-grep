@@ -1,4 +1,4 @@
-use std::{cmp, io};
+use std::io;
 
 use bstr::ByteSlice;
 

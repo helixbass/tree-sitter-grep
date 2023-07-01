@@ -6,16 +6,15 @@ use std::{
     path::Path,
 };
 
-use encoding_rs;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 
 pub use self::mmap::MmapChoice;
 use crate::{
     line_buffer::{alloc_error, DEFAULT_BUFFER_CAPACITY},
-    matcher::{LineTerminator, Match, Matcher},
+    matcher::{LineTerminator, Match},
+    query_context::QueryContext,
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
-    use_matcher::QueryContext,
 };
 
 mod core;
