@@ -9,8 +9,6 @@ pub fn alloc_error(limit: usize) -> io::Error {
     io::Error::new(io::ErrorKind::Other, msg)
 }
 
-/// Replaces `src` with `replacement` in bytes, and return the offset of the
-/// first replacement, if one exists.
 fn replace_bytes(bytes: &mut [u8], src: u8, replacement: u8) -> Option<usize> {
     if src == replacement {
         return None;
