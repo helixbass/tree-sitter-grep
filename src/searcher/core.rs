@@ -54,8 +54,13 @@ impl<'s, S: Sink> Core<'s, S> {
         &self.query_context
     }
 
-    pub fn matched(&mut self, buf: &[u8], range: &Range) -> Result<bool, S::Error> {
-        self.sink_matched(buf, range)
+    pub fn matched(
+        &mut self,
+        buf: &[u8],
+        range: &Range,
+        exact_matches: &[Range],
+    ) -> Result<bool, S::Error> {
+        self.sink_matched(buf, range, exact_matches)
     }
 
     pub fn begin(&mut self) -> Result<bool, S::Error> {
@@ -126,7 +131,12 @@ impl<'s, S: Sink> Core<'s, S> {
     }
 
     #[inline(always)]
-    fn sink_matched(&mut self, buf: &[u8], range: &Range) -> Result<bool, S::Error> {
+    fn sink_matched(
+        &mut self,
+        buf: &[u8],
+        range: &Range,
+        exact_matches: &[Range],
+    ) -> Result<bool, S::Error> {
         if !self.sink_break_context(range.start())? {
             return Ok(false);
         }
@@ -142,6 +152,7 @@ impl<'s, S: Sink> Core<'s, S> {
                 line_number: self.line_number,
                 buffer: buf,
                 bytes_range_in_buffer: range.start()..range.end(),
+                exact_matches,
             },
         )?;
         if !keepgoing {

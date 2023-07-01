@@ -44,6 +44,16 @@ impl Match {
     }
 
     #[inline]
+    pub fn with_end_if_extends(&self, end: usize) -> Match {
+        assert!(self.start <= end, "{} is not <= {}", self.start, end);
+        if end > self.end {
+            Match { end, ..*self }
+        } else {
+            *self
+        }
+    }
+
+    #[inline]
     pub fn offset(&self, amount: usize) -> Match {
         Match {
             start: self.start.checked_add(amount).unwrap(),

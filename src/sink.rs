@@ -2,7 +2,7 @@ use std::{error, fmt, io};
 
 use crate::{
     lines::LineIter,
-    matcher::LineTerminator,
+    matcher::{LineTerminator, Match},
     searcher::{ConfigError, Searcher},
 };
 
@@ -150,6 +150,7 @@ pub struct SinkMatch<'b> {
     pub(crate) line_number: Option<u64>,
     pub(crate) buffer: &'b [u8],
     pub(crate) bytes_range_in_buffer: std::ops::Range<usize>,
+    pub(crate) exact_matches: &'b [Match],
 }
 
 impl<'b> SinkMatch<'b> {

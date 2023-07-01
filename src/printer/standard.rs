@@ -305,38 +305,6 @@ impl<'p, 's, W: WriteColor> StandardSink<'p, 's, W> {
         self.stats.as_ref()
     }
 
-    fn record_matches(
-        &mut self,
-        searcher: &Searcher,
-        bytes: &[u8],
-        range: std::ops::Range<usize>,
-    ) -> io::Result<()> {
-        self.standard.matches.clear();
-        if !self.needs_match_granularity {
-            return Ok(());
-        }
-        let matches = &mut self.standard.matches;
-        todo!();
-        // find_iter_at_in_context(
-        //     searcher,
-        //     &self.matcher,
-        //     bytes,
-        //     range.clone(),
-        //     |m| {
-        //         let (s, e) = (m.start() - range.start, m.end() - range.start);
-        //         matches.push(Match::new(s, e));
-        //         true
-        //     },
-        // )?;
-        if !matches.is_empty()
-            && matches.last().unwrap().is_empty()
-            && matches.last().unwrap().start() >= range.end
-        {
-            matches.pop().unwrap();
-        }
-        Ok(())
-    }
-
     fn should_quit(&self) -> bool {
         let limit = match self.standard.config.max_matches {
             None => return false,
@@ -368,8 +336,6 @@ impl<'p, 's, W: WriteColor> Sink for StandardSink<'p, 's, W> {
             self.after_context_remaining = searcher.after_context() as u64;
         }
 
-        self.record_matches(searcher, mat.buffer(), mat.bytes_range_in_buffer())?;
-
         if let Some(ref mut stats) = self.stats {
             stats.add_matches(self.standard.matches.len() as u64);
             stats.add_matched_lines(mat.lines().count() as u64);
@@ -385,9 +351,9 @@ impl<'p, 's, W: WriteColor> Sink for StandardSink<'p, 's, W> {
         if ctx.kind() == &SinkContextKind::After {
             self.after_context_remaining = self.after_context_remaining.saturating_sub(1);
         }
-        if searcher.invert_match() {
-            self.record_matches(searcher, ctx.bytes(), 0..ctx.bytes().len())?;
-        }
+        // if searcher.invert_match() {
+        //     self.record_matches(searcher, ctx.bytes(), 0..ctx.bytes().len())?;
+        // }
 
         StandardImpl::from_context(searcher, self, ctx).sink()?;
         Ok(!self.should_quit())
@@ -446,7 +412,7 @@ impl<'a, W: WriteColor> StandardImpl<'a, W> {
         sink: &'a StandardSink<'_, '_, W>,
         mat: &'a SinkMatch<'a>,
     ) -> StandardImpl<'a, W> {
-        let sunk = Sunk::from_sink_match(mat, &sink.standard.matches);
+        let sunk = Sunk::from_sink_match(mat, mat.exact_matches);
         StandardImpl {
             sunk,
             ..StandardImpl::new(searcher, sink)

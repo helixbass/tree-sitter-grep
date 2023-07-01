@@ -9,12 +9,50 @@ use crate::{
     treesitter::{get_parser, node_to_match},
 };
 
+#[derive(Debug, Default)]
+struct AccumulatedExactMatches {
+    matches_with_offsets_relative_to_reference_beginning_of_line_offset: Vec<Range>,
+    reference_beginning_of_line_offset: Option<usize>,
+}
+
+impl AccumulatedExactMatches {
+    pub fn clear(&mut self) {
+        self.matches_with_offsets_relative_to_reference_beginning_of_line_offset
+            .clear();
+        self.reference_beginning_of_line_offset = None;
+    }
+
+    pub fn push(
+        &mut self,
+        match_with_absolute_offsets: Range,
+        current_beginning_of_line_offset: usize,
+    ) {
+        if self.reference_beginning_of_line_offset.is_none() {
+            self.reference_beginning_of_line_offset = Some(current_beginning_of_line_offset);
+        }
+        self.matches_with_offsets_relative_to_reference_beginning_of_line_offset
+            .push(Range::new(
+                match_with_absolute_offsets.start()
+                    - self.reference_beginning_of_line_offset.unwrap(),
+                match_with_absolute_offsets.end()
+                    - self.reference_beginning_of_line_offset.unwrap(),
+            ));
+    }
+}
+
+impl AsRef<[Range]> for AccumulatedExactMatches {
+    fn as_ref(&self) -> &[Range] {
+        &self.matches_with_offsets_relative_to_reference_beginning_of_line_offset
+    }
+}
+
 #[derive(Debug)]
 pub struct MultiLine<'s, S> {
     config: &'s Config,
     core: Core<'s, S>,
     slice: &'s [u8],
     last_match: Option<Range>,
+    accumulated_exact_matches: AccumulatedExactMatches,
 }
 
 impl<'s, S: Sink> MultiLine<'s, S> {
@@ -29,6 +67,7 @@ impl<'s, S: Sink> MultiLine<'s, S> {
             core: Core::new(searcher, query_context, write_to),
             slice,
             last_match: None,
+            accumulated_exact_matches: Default::default(),
         }
     }
 
@@ -113,18 +152,22 @@ impl<'s, S: Sink> MultiLine<'s, S> {
         match self.last_match.take() {
             None => {
                 self.last_match = Some(line);
+                self.accumulated_exact_matches.push(mat, line.start());
                 Ok(true)
             }
             Some(last_match) => {
                 if last_match.end() >= line.start() {
-                    self.last_match = Some(last_match.with_end(line.end()));
+                    self.last_match = Some(last_match.with_end_if_extends(line.end()));
+                    self.accumulated_exact_matches.push(mat, line.start());
                     Ok(true)
                 } else {
                     self.last_match = Some(line);
                     if !self.sink_context(&last_match)? {
                         return Ok(false);
                     }
-                    self.sink_matched(&last_match)
+                    let ret = self.sink_matched(&last_match);
+                    self.accumulated_exact_matches.push(mat, line.start());
+                    ret
                 }
             }
         }
@@ -172,7 +215,11 @@ impl<'s, S: Sink> MultiLine<'s, S> {
         if range.is_empty() {
             return Ok(false);
         }
-        self.core.matched(self.slice, range)
+        let ret = self
+            .core
+            .matched(self.slice, range, self.accumulated_exact_matches.as_ref());
+        self.accumulated_exact_matches.clear();
+        ret
     }
 
     fn sink_context(&mut self, range: &Range) -> Result<bool, S::Error> {
