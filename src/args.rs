@@ -1,8 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser};
+use termcolor::BufferWriter;
 
-use crate::language::SupportedLanguageName;
+use crate::{
+    language::SupportedLanguageName,
+    printer::StandardBuilder,
+    searcher::{Searcher, SearcherBuilder},
+    use_printer::Printer,
+};
 
 #[derive(Parser)]
 #[clap(group(
@@ -49,17 +55,33 @@ impl Args {
         self.paths.is_empty()
     }
 
-    pub(crate) fn output_mode(&self) -> OutputMode {
-        if self.vimgrep {
-            OutputMode::Vimgrep
-        } else {
-            OutputMode::Normal
-        }
+    fn line_number(&self) -> bool {
+        true
     }
-}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) enum OutputMode {
-    Normal,
-    Vimgrep,
+    fn per_match(&self) -> bool {
+        self.vimgrep
+    }
+
+    fn per_match_one_line(&self) -> bool {
+        self.vimgrep
+    }
+
+    fn column(&self) -> bool {
+        self.vimgrep
+    }
+
+    pub(crate) fn get_searcher(&self) -> Searcher {
+        SearcherBuilder::new()
+            .line_number(self.line_number())
+            .build()
+    }
+
+    pub(crate) fn get_printer(&self, buffer_writer: &BufferWriter) -> Printer {
+        StandardBuilder::new()
+            .per_match(self.per_match())
+            .per_match_one_line(self.per_match_one_line())
+            .column(self.column())
+            .build(buffer_writer.buffer())
+    }
 }
