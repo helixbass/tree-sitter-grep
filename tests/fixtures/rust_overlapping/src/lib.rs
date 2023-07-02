@@ -5,3 +5,10 @@ pub fn has_overlapping() {
         }
     };
 }
+
+fn something_else() {
+    hello();
+    hoo();
+    raa();
+    roo();
+}

@@ -509,7 +509,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query-source'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>>
 
             For more information, try '--help'.
         "#,
@@ -624,6 +624,9 @@ fn test_help_option() {
               -f, --filter <FILTER>
               -a, --filter-arg <FILTER_ARG>
                   --vimgrep
+              -A, --after-context <NUM>
+              -B, --before-context <NUM>
+              -C, --context <NUM>
               -h, --help                             Print help
         "#,
     );
@@ -711,6 +714,75 @@ fn test_overlapping_matches_vimgrep() {
             $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust --vimgrep
             src/lib.rs:2:13:    let f = || {
             src/lib.rs:3:9:        || {
+        "#,
+    );
+}
+
+#[test]
+fn test_after_context() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust --after-context 2
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            src/lib.rs-7-#[cfg(test)]
+            --
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+            src/lib.rs-17-
+        "#,
+    );
+}
+
+#[test]
+fn test_after_context_matches_overlap_context_lines() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep -q '(call_expression function: (identifier) @function_name (#match? @function_name "^h"))' -l rust -A 2
+            src/lib.rs:10:    hello();
+            src/lib.rs:11:    hoo();
+            src/lib.rs-12-    raa();
+            src/lib.rs-13-    roo();
+        "#,
+    );
+}
+
+#[test]
+fn test_after_context_overlapping_matches() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --after-context 2
+            src/lib.rs:2:    let f = || {
+            src/lib.rs:3:        || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    };
+            src/lib.rs-7-}
+            src/lib.rs-8-
+        "#,
+    );
+}
+
+#[test]
+fn test_after_context_overlapping_multiline_matches_vimgrep() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --after-context 2 --vimgrep
+            src/lib.rs:2:13:    let f = || {
+            src/lib.rs:3:9:        || {
+            src/lib.rs-7-}
+            src/lib.rs-8-
         "#,
     );
 }

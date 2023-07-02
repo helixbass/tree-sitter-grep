@@ -40,6 +40,15 @@ pub struct Args {
 
     #[arg(long)]
     vimgrep: bool,
+
+    #[arg(short = 'A', long, value_name = "NUM")]
+    pub after_context: Option<usize>,
+
+    #[arg(short = 'B', long, value_name = "NUM")]
+    pub before_context: Option<usize>,
+
+    #[arg(short = 'C', long, value_name = "NUM")]
+    pub context: Option<usize>,
 }
 
 impl Args {
@@ -71,9 +80,24 @@ impl Args {
         self.vimgrep
     }
 
+    fn contexts(&self) -> (usize, usize) {
+        let both = self.context.unwrap_or(0);
+        if both > 0 {
+            (both, both)
+        } else {
+            (
+                self.before_context.unwrap_or(0),
+                self.after_context.unwrap_or(0),
+            )
+        }
+    }
+
     pub(crate) fn get_searcher(&self) -> Searcher {
+        let (before_context, after_context) = self.contexts();
         SearcherBuilder::new()
             .line_number(self.line_number())
+            .before_context(before_context)
+            .after_context(after_context)
             .build()
     }
 
