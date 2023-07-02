@@ -786,3 +786,238 @@ fn test_after_context_overlapping_multiline_matches_vimgrep() {
         "#,
     );
 }
+
+#[test]
+fn test_after_context_short_option() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust -A 2
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            src/lib.rs-7-#[cfg(test)]
+            --
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+            src/lib.rs-17-
+        "#,
+    );
+}
+
+#[test]
+fn test_before_context() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust --before-context 3
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            --
+            src/lib.rs-9-    use super::*;
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_before_context_short_option() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust -B 3
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            --
+            src/lib.rs-9-    use super::*;
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_before_context_matches_overlap_context_lines() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep -q '(call_expression function: (identifier) @function_name (#match? @function_name "^h"))' -l rust -B 2
+            src/lib.rs-8-
+            src/lib.rs-9-fn something_else() {
+            src/lib.rs:10:    hello();
+            src/lib.rs:11:    hoo();
+        "#,
+    );
+}
+
+#[test]
+fn test_before_context_overlapping_matches() {
+    assert_sorted_output(
+        "rust_overlapping_with_preceding_lines",
+        r#"
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --before-context 2
+            src/lib.rs-5-        .i_promise()
+            src/lib.rs-6-        .but_it_has_to_be_longer();
+            src/lib.rs:7:    let f = || {
+            src/lib.rs:8:        || {
+            src/lib.rs:9:            println!("whee");
+            src/lib.rs:10:        }
+            src/lib.rs:11:    };
+        "#,
+    );
+}
+
+#[test]
+fn test_before_context_overlapping_multiline_matches_vimgrep() {
+    assert_sorted_output(
+        "rust_overlapping_with_preceding_lines",
+        r#"
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --before-context 2 --vimgrep
+            src/lib.rs-5-        .i_promise()
+            src/lib.rs-6-        .but_it_has_to_be_longer();
+            src/lib.rs:7:13:    let f = || {
+            src/lib.rs:8:9:        || {
+        "#,
+    );
+}
+
+#[test]
+fn test_context() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust --context 2
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            src/lib.rs-7-#[cfg(test)]
+            --
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+            src/lib.rs-17-
+        "#,
+    );
+}
+
+#[test]
+fn test_context_adjacent_after_and_before_context_lines() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust --context 3
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            src/lib.rs-7-#[cfg(test)]
+            src/lib.rs-8-mod tests {
+            src/lib.rs-9-    use super::*;
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+            src/lib.rs-17-
+            src/lib.rs-18-mod stop;
+        "#,
+    );
+}
+
+#[test]
+fn test_context_overlapping_after_and_before_context_lines() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust --context 4
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            src/lib.rs-7-#[cfg(test)]
+            src/lib.rs-8-mod tests {
+            src/lib.rs-9-    use super::*;
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+            src/lib.rs-17-
+            src/lib.rs-18-mod stop;
+        "#,
+    );
+}
+
+#[test]
+fn test_context_short_option() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust -C 2
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            src/lib.rs-7-#[cfg(test)]
+            --
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+            src/lib.rs-17-
+        "#,
+    );
+}
