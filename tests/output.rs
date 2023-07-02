@@ -1021,3 +1021,29 @@ fn test_context_short_option() {
         "#,
     );
 }
+
+#[test]
+fn test_before_and_after_context() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' -l rust --before-context 2 --after-context 1
+            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:1:pub fn helper() {}
+            src/lib.rs-1-mod helpers;
+            src/lib.rs-2-
+            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:    left + right
+            src/lib.rs:5:}
+            src/lib.rs-6-
+            --
+            src/lib.rs-10-
+            src/lib.rs-11-    #[test]
+            src/lib.rs:12:    fn it_works() {
+            src/lib.rs:13:        let result = add(2, 2);
+            src/lib.rs:14:        assert_eq!(result, 4);
+            src/lib.rs:15:    }
+            src/lib.rs-16-}
+        "#,
+    );
+}
