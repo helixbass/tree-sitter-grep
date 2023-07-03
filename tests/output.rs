@@ -127,7 +127,8 @@ fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
 }
 
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
-    regex!(r#"^[^:]+:"#).replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
+    regex!(r#"^[^:]+[:-]\d+[:-]"#)
+        .replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
 
 fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
