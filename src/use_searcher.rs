@@ -3,9 +3,10 @@ use std::{
     rc::Rc,
 };
 
-use grep::searcher::{Searcher, SearcherBuilder};
-
-use crate::OutputMode;
+use crate::{
+    searcher::{Searcher, SearcherBuilder},
+    OutputMode,
+};
 
 thread_local! {
     static SEARCHER: OnceCell<(Rc<RefCell<Searcher>>, OutputMode)> = Default::default();
@@ -28,10 +29,7 @@ pub(crate) fn get_searcher(output_mode: OutputMode) -> Rc<RefCell<Searcher>> {
 
 fn create_searcher(output_mode: OutputMode) -> Searcher {
     match output_mode {
-        OutputMode::Normal => SearcherBuilder::new().multi_line(true).build(),
-        OutputMode::Vimgrep => SearcherBuilder::new()
-            .multi_line(true)
-            .line_number(true)
-            .build(),
+        OutputMode::Normal => SearcherBuilder::new().build(),
+        OutputMode::Vimgrep => SearcherBuilder::new().line_number(true).build(),
     }
 }

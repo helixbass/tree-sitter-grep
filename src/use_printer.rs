@@ -3,10 +3,12 @@ use std::{
     rc::Rc,
 };
 
-use grep::printer::{Standard, StandardBuilder};
 use termcolor::{Buffer, BufferWriter};
 
-use crate::args::OutputMode;
+use crate::{
+    args::OutputMode,
+    printer::{Standard, StandardBuilder},
+};
 
 type Printer = Standard<Buffer>;
 

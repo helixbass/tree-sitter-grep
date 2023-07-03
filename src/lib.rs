@@ -14,13 +14,19 @@ use tree_sitter::Query;
 
 mod args;
 mod language;
+mod line_buffer;
+mod lines;
 mod macros;
 mod matcher;
 mod plugin;
 mod printer;
 mod project_file_walker;
+mod query_context;
 mod searcher;
+mod sink;
 mod treesitter;
+mod use_printer;
+mod use_searcher;
 
 pub use args::Args;
 use args::OutputMode;
@@ -28,12 +34,12 @@ use language::{
     get_all_supported_languages, maybe_supported_language_from_path, SupportedLanguage,
     SupportedLanguageName,
 };
-use matcher::TreeSitterMatcher;
 pub use plugin::PluginInitializeReturn;
-use printer::get_printer;
 use project_file_walker::get_project_file_parallel_iterator;
-use searcher::get_searcher;
+use query_context::QueryContext;
 use treesitter::maybe_get_query;
+use use_printer::get_printer;
+use use_searcher::get_searcher;
 
 #[derive(Default)]
 struct CaptureIndex(OnceLock<Result<u32, ()>>);
@@ -127,8 +133,8 @@ pub fn run(args: Args) {
             let path =
                 format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
 
-            let matcher = TreeSitterMatcher::new(
-                &query,
+            let query_context = QueryContext::new(
+                query,
                 capture_index,
                 language.language(),
                 args.filter.clone(),
@@ -138,7 +144,7 @@ pub fn run(args: Args) {
             printer.get_mut().clear();
             get_searcher(output_mode)
                 .borrow_mut()
-                .search_path(&matcher, path, printer.sink_with_path(&matcher, path))
+                .search_path(query_context, path, printer.sink_with_path(path))
                 .unwrap();
             buffer_writer.print(printer.get_mut()).unwrap();
         });

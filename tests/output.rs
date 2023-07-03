@@ -675,3 +675,42 @@ fn test_macro_contents() {
         "#,
     );
 }
+
+#[test]
+fn test_sorting_maybe_nesting_related() {
+    assert_sorted_output(
+        "sorting_maybe_nesting_related",
+        r#"
+            $ tree-sitter-grep -Q ./query.scm -l rust --vimgrep
+            foo.rs:44:14:            .create_variable_statement_raw(
+            foo.rs:47:22:                    .create_variable_declaration_list_raw(
+        "#,
+    );
+}
+
+#[test]
+fn test_overlapping_matches() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust
+            src/lib.rs:2:    let f = || {
+            src/lib.rs:3:        || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    };
+        "#,
+    );
+}
+
+#[test]
+fn test_overlapping_matches_vimgrep() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep --query-source '(closure_expression) @closure_expression' --language rust --vimgrep
+            src/lib.rs:2:13:    let f = || {
+            src/lib.rs:3:9:        || {
+        "#,
+    );
+}
