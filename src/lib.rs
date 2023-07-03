@@ -29,7 +29,6 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
-use args::OutputMode;
 use language::{
     get_all_supported_languages, maybe_supported_language_from_path, SupportedLanguage,
     SupportedLanguageName,
@@ -117,7 +116,6 @@ pub fn run(args: Args) {
     let specified_supported_language = args.language.map(|language| language.get_language());
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
-    let output_mode = args.output_mode();
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
 
     get_project_file_parallel_iterator(specified_supported_language.as_deref(), &args.use_paths())
@@ -128,7 +126,7 @@ pub fn run(args: Args) {
                 cached_queries.get_and_cache_query_for_language(&query_source, &*language)
             );
             let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref());
-            let printer = get_printer(&buffer_writer, output_mode);
+            let printer = get_printer(&buffer_writer, &args);
             let mut printer = printer.borrow_mut();
             let path =
                 format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
@@ -142,7 +140,7 @@ pub fn run(args: Args) {
             );
 
             printer.get_mut().clear();
-            get_searcher(output_mode)
+            get_searcher(&args)
                 .borrow_mut()
                 .search_path(query_context, path, printer.sink_with_path(path))
                 .unwrap();

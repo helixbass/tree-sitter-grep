@@ -1,46 +1,26 @@
 use std::{
     cell::{OnceCell, RefCell},
+    ptr,
     rc::Rc,
 };
 
 use termcolor::{Buffer, BufferWriter};
 
-use crate::{
-    args::OutputMode,
-    printer::{Standard, StandardBuilder},
-};
+use crate::{printer::Standard, Args};
 
-type Printer = Standard<Buffer>;
+pub type Printer = Standard<Buffer>;
 
 thread_local! {
-    static PRINTER: OnceCell<(Rc<RefCell<Printer>>, OutputMode)> = Default::default();
+    static PRINTER: OnceCell<(Rc<RefCell<Printer>>, *const Args)> = Default::default();
 }
-pub(crate) fn get_printer(
-    buffer_writer: &BufferWriter,
-    output_mode: OutputMode,
-) -> Rc<RefCell<Printer>> {
+pub(crate) fn get_printer(buffer_writer: &BufferWriter, args: &Args) -> Rc<RefCell<Printer>> {
     PRINTER.with(|printer| {
-        let (printer, output_mode_when_initialized) = printer.get_or_init(|| {
-            (
-                Rc::new(RefCell::new(create_printer(buffer_writer, output_mode))),
-                output_mode,
-            )
-        });
+        let (printer, args_when_initialized) =
+            printer.get_or_init(|| (Rc::new(RefCell::new(args.get_printer(buffer_writer))), args));
         assert!(
-            *output_mode_when_initialized == output_mode,
-            "Using multiple output modes not supported"
+            ptr::eq(*args_when_initialized, args),
+            "Using multiple instances of args not supported"
         );
         printer.clone()
     })
-}
-
-fn create_printer(buffer_writer: &BufferWriter, output_mode: OutputMode) -> Printer {
-    match output_mode {
-        OutputMode::Normal => Standard::new(buffer_writer.buffer()),
-        OutputMode::Vimgrep => StandardBuilder::new()
-            .per_match(true)
-            .per_match_one_line(true)
-            .column(true)
-            .build(buffer_writer.buffer()),
-    }
 }

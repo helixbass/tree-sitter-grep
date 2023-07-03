@@ -1,8 +1,14 @@
 use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser};
+use termcolor::BufferWriter;
 
-use crate::language::SupportedLanguageName;
+use crate::{
+    language::SupportedLanguageName,
+    printer::StandardBuilder,
+    searcher::{Searcher, SearcherBuilder},
+    use_printer::Printer,
+};
 
 #[derive(Parser)]
 #[clap(group(
@@ -34,6 +40,15 @@ pub struct Args {
 
     #[arg(long)]
     vimgrep: bool,
+
+    #[arg(short = 'A', long, value_name = "NUM")]
+    pub after_context: Option<usize>,
+
+    #[arg(short = 'B', long, value_name = "NUM")]
+    pub before_context: Option<usize>,
+
+    #[arg(short = 'C', long, value_name = "NUM")]
+    pub context: Option<usize>,
 }
 
 impl Args {
@@ -49,17 +64,48 @@ impl Args {
         self.paths.is_empty()
     }
 
-    pub(crate) fn output_mode(&self) -> OutputMode {
-        if self.vimgrep {
-            OutputMode::Vimgrep
+    fn line_number(&self) -> bool {
+        true
+    }
+
+    fn per_match(&self) -> bool {
+        self.vimgrep
+    }
+
+    fn per_match_one_line(&self) -> bool {
+        self.vimgrep
+    }
+
+    fn column(&self) -> bool {
+        self.vimgrep
+    }
+
+    fn contexts(&self) -> (usize, usize) {
+        let both = self.context.unwrap_or(0);
+        if both > 0 {
+            (both, both)
         } else {
-            OutputMode::Normal
+            (
+                self.before_context.unwrap_or(0),
+                self.after_context.unwrap_or(0),
+            )
         }
     }
-}
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) enum OutputMode {
-    Normal,
-    Vimgrep,
+    pub(crate) fn get_searcher(&self) -> Searcher {
+        let (before_context, after_context) = self.contexts();
+        SearcherBuilder::new()
+            .line_number(self.line_number())
+            .before_context(before_context)
+            .after_context(after_context)
+            .build()
+    }
+
+    pub(crate) fn get_printer(&self, buffer_writer: &BufferWriter) -> Printer {
+        StandardBuilder::new()
+            .per_match(self.per_match())
+            .per_match_one_line(self.per_match_one_line())
+            .column(self.column())
+            .build(buffer_writer.buffer())
+    }
 }
