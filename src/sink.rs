@@ -267,7 +267,7 @@ pub mod sinks {
                     return Err(io::Error::error_message(msg));
                 }
             };
-            (self.0)(line_number, &matched)
+            (self.0)(line_number, matched)
         }
     }
 

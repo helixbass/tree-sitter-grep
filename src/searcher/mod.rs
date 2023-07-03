@@ -353,7 +353,7 @@ impl Searcher {
             let cap = file.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
             buf.reserve(cap);
             read_from
-                .read_to_end(&mut *buf)
+                .read_to_end(&mut buf)
                 .map_err(S::Error::error_io)?;
             return Ok(());
         }
@@ -371,7 +371,7 @@ impl Searcher {
             Some(heap_limit) => heap_limit,
             None => {
                 read_from
-                    .read_to_end(&mut *buf)
+                    .read_to_end(&mut buf)
                     .map_err(S::Error::error_io)?;
                 return Ok(());
             }
