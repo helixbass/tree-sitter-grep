@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/sink.rs
+
 use std::{error, fmt, io};
 
 use crate::{
@@ -175,11 +177,13 @@ impl<'b> SinkMatch<'b> {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn buffer(&self) -> &'b [u8] {
         self.buffer
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn bytes_range_in_buffer(&self) -> std::ops::Range<usize> {
         self.bytes_range_in_buffer.clone()
     }
@@ -214,6 +218,7 @@ impl<'b> SinkContext<'b> {
     }
 
     #[cfg(test)]
+    #[allow(dead_code)]
     pub(crate) fn lines(&self) -> LineIter<'b> {
         LineIter::new(self.line_term.as_byte(), self.bytes)
     }

@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/lines.rs
+
 use bstr::ByteSlice;
 use bytecount;
 
@@ -82,6 +84,7 @@ pub fn count(bytes: &[u8], line_term: u8) -> u64 {
 }
 
 #[inline(always)]
+#[allow(dead_code)]
 pub fn without_terminator(bytes: &[u8], line_term: LineTerminator) -> &[u8] {
     let line_term = line_term.as_bytes();
     let start = bytes.len().saturating_sub(line_term.len());

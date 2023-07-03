@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/printer/src/stats.rs
+
 use std::{
     ops::{Add, AddAssign},
     time::Duration,
@@ -5,8 +7,7 @@ use std::{
 
 use super::util::NiceDuration;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde1", derive(serde::Serialize))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Stats {
     elapsed: NiceDuration,
     searches: u64,
@@ -64,30 +65,37 @@ impl Stats {
         Stats::default()
     }
 
+    #[allow(dead_code)]
     pub fn elapsed(&self) -> Duration {
         self.elapsed.0
     }
 
+    #[allow(dead_code)]
     pub fn searches(&self) -> u64 {
         self.searches
     }
 
+    #[allow(dead_code)]
     pub fn searches_with_match(&self) -> u64 {
         self.searches_with_match
     }
 
+    #[allow(dead_code)]
     pub fn bytes_searched(&self) -> u64 {
         self.bytes_searched
     }
 
+    #[allow(dead_code)]
     pub fn bytes_printed(&self) -> u64 {
         self.bytes_printed
     }
 
+    #[allow(dead_code)]
     pub fn matched_lines(&self) -> u64 {
         self.matched_lines
     }
 
+    #[allow(dead_code)]
     pub fn matches(&self) -> u64 {
         self.matches
     }

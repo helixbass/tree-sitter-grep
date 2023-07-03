@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/printer/src/counter.rs
+
 use std::io::{self, Write};
 
 use termcolor::{ColorSpec, WriteColor};
@@ -11,7 +13,11 @@ pub struct CounterWriter<W> {
 
 impl<W: Write> CounterWriter<W> {
     pub fn new(wtr: W) -> CounterWriter<W> {
-        CounterWriter { wtr, count: 0, total_count: 0 }
+        CounterWriter {
+            wtr,
+            count: 0,
+            total_count: 0,
+        }
     }
 }
 

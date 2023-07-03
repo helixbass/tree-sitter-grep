@@ -1,5 +1,6 @@
-use std::fs::File;
-use std::path::Path;
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/mmap.rs
+
+use std::{fs::File, path::Path};
 
 use memmap::Mmap;
 
@@ -19,19 +20,17 @@ impl Default for MmapChoice {
 }
 
 impl MmapChoice {
+    #[allow(dead_code)]
     pub unsafe fn auto() -> MmapChoice {
         MmapChoice(MmapChoiceImpl::Auto)
     }
 
+    #[allow(dead_code)]
     pub fn never() -> MmapChoice {
         MmapChoice(MmapChoiceImpl::Never)
     }
 
-    pub(crate) fn open(
-        &self,
-        file: &File,
-        path: Option<&Path>,
-    ) -> Option<Mmap> {
+    pub(crate) fn open(&self, file: &File, path: Option<&Path>) -> Option<Mmap> {
         if !self.is_enabled() {
             return None;
         }
@@ -42,11 +41,7 @@ impl MmapChoice {
             Ok(mmap) => Some(mmap),
             Err(err) => {
                 if let Some(path) = path {
-                    log::debug!(
-                        "{}: failed to open memory map: {}",
-                        path.display(),
-                        err
-                    );
+                    log::debug!("{}: failed to open memory map: {}", path.display(), err);
                 } else {
                     log::debug!("failed to open memory map: {}", err);
                 }
