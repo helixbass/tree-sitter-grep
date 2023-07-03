@@ -103,6 +103,7 @@ impl ops::Index<Match> for str {
 pub struct LineTerminator(LineTerminatorImp);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[allow(clippy::upper_case_acronyms)]
 enum LineTerminatorImp {
     Byte([u8; 1]),
     CRLF,

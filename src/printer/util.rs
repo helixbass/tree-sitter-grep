@@ -163,10 +163,7 @@ impl Serialize for NiceDuration {
 
 pub fn trim_ascii_prefix(line_term: LineTerminator, slice: &[u8], range: Match) -> Match {
     fn is_space(b: u8) -> bool {
-        match b {
-            b'\t' | b'\n' | b'\x0B' | b'\x0C' | b'\r' | b' ' => true,
-            _ => false,
-        }
+        matches!(b, b'\t' | b'\n' | b'\x0B' | b'\x0C' | b'\r' | b' ')
     }
 
     let count = slice[range]

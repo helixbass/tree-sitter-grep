@@ -1,7 +1,6 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/lines.rs
 
 use bstr::ByteSlice;
-use bytecount;
 
 use crate::matcher::{LineTerminator, Match};
 

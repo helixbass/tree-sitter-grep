@@ -231,7 +231,7 @@ impl<W: io::Write> Standard<NoColor<W>> {
 }
 
 impl<W: WriteColor> Standard<W> {
-    pub fn sink<'s>(&'s mut self) -> StandardSink<'static, 's, W> {
+    pub fn sink(&mut self) -> StandardSink<'static, '_, W> {
         let stats = if self.config.stats {
             Some(Stats::new())
         } else {
@@ -465,6 +465,7 @@ impl<'a, W: WriteColor> StandardImpl<'a, W> {
                 self.sink_fast()
             }
         } else {
+            #[allow(clippy::collapsible_else_if)]
             if !self.is_context() {
                 self.sink_slow_multi_line()
             } else {
@@ -813,6 +814,7 @@ impl<'a, W: WriteColor> StandardImpl<'a, W> {
                 self.write(b"[Omitted long matching line]")?;
             }
         } else {
+            #[allow(clippy::collapsible_else_if)]
             if self.config().only_matching {
                 if self.is_context() {
                     self.write(b"[Omitted long context line]")?;
@@ -948,7 +950,7 @@ impl<'a, W: WriteColor> StandardImpl<'a, W> {
     }
 
     fn trim_line_terminator(&self, buf: &[u8], line: &mut Match) {
-        trim_line_terminator(&self.searcher, buf, line);
+        trim_line_terminator(self.searcher, buf, line);
     }
 
     fn has_line_terminator(&self, buf: &[u8]) -> bool {
