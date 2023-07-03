@@ -218,6 +218,7 @@ pub struct Standard<W> {
 }
 
 impl<W: WriteColor> Standard<W> {
+    #[allow(dead_code)]
     pub fn new(wtr: W) -> Standard<W> {
         StandardBuilder::new().build(wtr)
     }
