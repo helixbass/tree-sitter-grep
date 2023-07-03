@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/sink.rs
+
 use std::{error, fmt, io};
 
 use crate::{

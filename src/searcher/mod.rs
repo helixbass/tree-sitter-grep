@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/mod.rs
+
 use std::{
     cell::RefCell,
     cmp, fmt,

@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/printer/src/stats.rs
+
 use std::{
     ops::{Add, AddAssign},
     time::Duration,

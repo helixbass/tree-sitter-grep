@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/printer/src/standard.rs
+
 use std::{
     cell::{Cell, RefCell},
     cmp,

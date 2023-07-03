@@ -1,6 +1,6 @@
-use std::error;
-use std::fmt;
-use std::str::FromStr;
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/printer/src/color.rs
+
+use std::{error, fmt, str::FromStr};
 
 use termcolor::{Color, ColorSpec, ParseColorError};
 
@@ -39,10 +39,7 @@ impl error::Error for ColorError {
 
 impl ColorError {
     fn from_parse_error(err: ParseColorError) -> ColorError {
-        ColorError::UnrecognizedColor(
-            err.invalid().to_string(),
-            err.to_string(),
-        )
+        ColorError::UnrecognizedColor(err.invalid().to_string(), err.to_string())
     }
 }
 
@@ -220,31 +217,39 @@ impl FromStr for UserColorSpec {
         }
         let otype: OutType = pieces[0].parse()?;
         match pieces[1].parse()? {
-            SpecType::None => {
-                Ok(UserColorSpec { ty: otype, value: SpecValue::None })
-            }
+            SpecType::None => Ok(UserColorSpec {
+                ty: otype,
+                value: SpecValue::None,
+            }),
             SpecType::Style => {
                 if pieces.len() < 3 {
                     return Err(ColorError::InvalidFormat(s.to_string()));
                 }
                 let style: Style = pieces[2].parse()?;
-                Ok(UserColorSpec { ty: otype, value: SpecValue::Style(style) })
+                Ok(UserColorSpec {
+                    ty: otype,
+                    value: SpecValue::Style(style),
+                })
             }
             SpecType::Fg => {
                 if pieces.len() < 3 {
                     return Err(ColorError::InvalidFormat(s.to_string()));
                 }
-                let color: Color =
-                    pieces[2].parse().map_err(ColorError::from_parse_error)?;
-                Ok(UserColorSpec { ty: otype, value: SpecValue::Fg(color) })
+                let color: Color = pieces[2].parse().map_err(ColorError::from_parse_error)?;
+                Ok(UserColorSpec {
+                    ty: otype,
+                    value: SpecValue::Fg(color),
+                })
             }
             SpecType::Bg => {
                 if pieces.len() < 3 {
                     return Err(ColorError::InvalidFormat(s.to_string()));
                 }
-                let color: Color =
-                    pieces[2].parse().map_err(ColorError::from_parse_error)?;
-                Ok(UserColorSpec { ty: otype, value: SpecValue::Bg(color) })
+                let color: Color = pieces[2].parse().map_err(ColorError::from_parse_error)?;
+                Ok(UserColorSpec {
+                    ty: otype,
+                    value: SpecValue::Bg(color),
+                })
             }
         }
     }

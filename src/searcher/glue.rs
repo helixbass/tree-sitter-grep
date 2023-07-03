@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/glue.rs
+
 use tree_sitter::{Node, QueryCursor};
 
 use crate::{
@@ -6,7 +8,7 @@ use crate::{
     query_context::QueryContext,
     searcher::{core::Core, Config, Range, Searcher},
     sink::Sink,
-    treesitter::{get_parser, node_to_match},
+    treesitter::get_parser,
 };
 
 #[derive(Debug, Default)]
@@ -245,7 +247,7 @@ impl<'s, S: Sink> MultiLine<'s, S> {
         &mut self,
         matches: &mut impl Iterator<Item = Node<'tree>>,
     ) -> Result<Option<Range>, S::Error> {
-        Ok(matches.next().as_ref().map(node_to_match))
+        Ok(matches.next().as_ref().map(Into::into))
     }
 
     fn advance(&mut self, range: &Range) {

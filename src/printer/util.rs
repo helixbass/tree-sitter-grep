@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/printer/src/util.rs
+
 use std::{borrow::Cow, fmt, path::Path, time};
 
 use bstr::{ByteSlice, ByteVec};

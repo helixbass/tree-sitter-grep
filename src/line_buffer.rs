@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/line_buffer.rs
+
 use std::io;
 
 use bstr::ByteSlice;

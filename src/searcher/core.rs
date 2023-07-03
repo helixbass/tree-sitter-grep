@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/core.rs
+
 use crate::{
     lines::{self, LineStep},
     query_context::QueryContext,

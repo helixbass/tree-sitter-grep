@@ -1,3 +1,5 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/matcher/src/lib.rs
+
 use std::{fmt, io, ops, u64};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

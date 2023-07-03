@@ -14,8 +14,10 @@ pub(crate) fn maybe_get_query(source: &str, language: Language) -> Option<Query>
     Query::new(language, source).ok()
 }
 
-pub(crate) fn node_to_match(node: &Node) -> Match {
-    let range = node.range();
+impl From<&'_ Node<'_>> for Match {
+    fn from(node: &Node) -> Self {
+        let range = node.range();
 
-    Match::new(range.start_byte, range.end_byte)
+        Self::new(range.start_byte, range.end_byte)
+    }
 }
