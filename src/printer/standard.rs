@@ -98,26 +98,31 @@ impl StandardBuilder {
         self.build(NoColor::new(wtr))
     }
 
+    #[allow(dead_code)]
     pub fn color_specs(&mut self, specs: ColorSpecs) -> &mut StandardBuilder {
         self.config.colors = specs;
         self
     }
 
+    #[allow(dead_code)]
     pub fn stats(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.stats = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn heading(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.heading = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn path(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.path = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn only_matching(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.only_matching = yes;
         self
@@ -133,16 +138,19 @@ impl StandardBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn max_columns(&mut self, limit: Option<u64>) -> &mut StandardBuilder {
         self.config.max_columns = limit;
         self
     }
 
+    #[allow(dead_code)]
     pub fn max_columns_preview(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.max_columns_preview = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn max_matches(&mut self, limit: Option<u64>) -> &mut StandardBuilder {
         self.config.max_matches = limit;
         self
@@ -153,41 +161,49 @@ impl StandardBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn byte_offset(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.byte_offset = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn trim_ascii(&mut self, yes: bool) -> &mut StandardBuilder {
         self.config.trim_ascii = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn separator_search(&mut self, sep: Option<Vec<u8>>) -> &mut StandardBuilder {
         self.config.separator_search = Arc::new(sep);
         self
     }
 
+    #[allow(dead_code)]
     pub fn separator_context(&mut self, sep: Option<Vec<u8>>) -> &mut StandardBuilder {
         self.config.separator_context = Arc::new(sep);
         self
     }
 
+    #[allow(dead_code)]
     pub fn separator_field_match(&mut self, sep: Vec<u8>) -> &mut StandardBuilder {
         self.config.separator_field_match = Arc::new(sep);
         self
     }
 
+    #[allow(dead_code)]
     pub fn separator_field_context(&mut self, sep: Vec<u8>) -> &mut StandardBuilder {
         self.config.separator_field_context = Arc::new(sep);
         self
     }
 
+    #[allow(dead_code)]
     pub fn separator_path(&mut self, sep: Option<u8>) -> &mut StandardBuilder {
         self.config.separator_path = sep;
         self
     }
 
+    #[allow(dead_code)]
     pub fn path_terminator(&mut self, terminator: Option<u8>) -> &mut StandardBuilder {
         self.config.path_terminator = terminator;
         self
@@ -208,6 +224,7 @@ impl<W: WriteColor> Standard<W> {
 }
 
 impl<W: io::Write> Standard<NoColor<W>> {
+    #[allow(dead_code)]
     pub fn new_no_color(wtr: W) -> Standard<NoColor<W>> {
         StandardBuilder::new().build_no_color(wtr)
     }
@@ -270,6 +287,7 @@ impl<W: WriteColor> Standard<W> {
 }
 
 impl<W> Standard<W> {
+    #[allow(dead_code)]
     pub fn has_written(&self) -> bool {
         self.wtr.borrow().total_count() > 0
     }
@@ -278,6 +296,7 @@ impl<W> Standard<W> {
         self.wtr.get_mut().get_mut()
     }
 
+    #[allow(dead_code)]
     pub fn into_inner(self) -> W {
         self.wtr.into_inner().into_inner()
     }
@@ -291,18 +310,22 @@ pub struct StandardSink<'p, 's, W> {
     match_count: u64,
     after_context_remaining: u64,
     stats: Option<Stats>,
+    #[allow(dead_code)]
     needs_match_granularity: bool,
 }
 
 impl<'p, 's, W: WriteColor> StandardSink<'p, 's, W> {
+    #[allow(dead_code)]
     pub fn has_match(&self) -> bool {
         self.match_count > 0
     }
 
+    #[allow(dead_code)]
     pub fn match_count(&self) -> u64 {
         self.match_count
     }
 
+    #[allow(dead_code)]
     pub fn stats(&self) -> Option<&Stats> {
         self.stats.as_ref()
     }

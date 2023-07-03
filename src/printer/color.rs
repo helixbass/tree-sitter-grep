@@ -4,6 +4,7 @@ use std::{error, fmt, str::FromStr};
 
 use termcolor::{Color, ColorSpec, ParseColorError};
 
+#[allow(dead_code)]
 pub fn default_color_specs() -> Vec<UserColorSpec> {
     vec![
         #[cfg(unix)]
@@ -91,6 +92,7 @@ pub struct UserColorSpec {
 }
 
 impl UserColorSpec {
+    #[allow(dead_code)]
     pub fn to_color_spec(&self) -> ColorSpec {
         let mut spec = ColorSpec::default();
         self.value.merge_into(&mut spec);
@@ -146,6 +148,7 @@ impl ColorSpecs {
         merged
     }
 
+    #[allow(dead_code)]
     pub fn default_with_color() -> ColorSpecs {
         ColorSpecs::new(&default_color_specs())
     }

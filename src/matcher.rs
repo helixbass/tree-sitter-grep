@@ -1,6 +1,6 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/matcher/src/lib.rs
 
-use std::{fmt, io, ops, u64};
+use std::{fmt, io, ops};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Match {
@@ -115,6 +115,7 @@ impl LineTerminator {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn crlf() -> LineTerminator {
         LineTerminator(LineTerminatorImp::CRLF)
     }
@@ -172,10 +173,4 @@ impl From<NoError> for io::Error {
     fn from(_: NoError) -> io::Error {
         panic!("BUG for NoError: an impossible error occurred")
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum LineMatchKind {
-    Confirmed(usize),
-    Candidate(usize),
 }

@@ -1,6 +1,6 @@
-use tree_sitter::{Language, Node, Parser, Query, QueryCursor};
+use tree_sitter::{Language, Node, Parser, Query};
 
-use crate::{matcher::Match, plugin::Filterer};
+use crate::matcher::Match;
 
 pub(crate) fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();

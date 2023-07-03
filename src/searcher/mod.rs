@@ -53,6 +53,7 @@ impl Default for Config {
 }
 
 impl Config {
+    #[allow(dead_code)]
     fn max_context(&self) -> usize {
         cmp::max(self.before_context, self.after_context)
     }
@@ -61,6 +62,7 @@ impl Config {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ConfigError {
     SearchUnavailable,
+    #[allow(dead_code)]
     MismatchedLineTerminators {
         matcher: LineTerminator,
         searcher: LineTerminator,
@@ -133,11 +135,13 @@ impl SearcherBuilder {
         }
     }
 
+    #[allow(dead_code)]
     pub fn line_terminator(&mut self, line_term: LineTerminator) -> &mut SearcherBuilder {
         self.config.line_term = line_term;
         self
     }
 
+    #[allow(dead_code)]
     pub fn invert_match(&mut self, yes: bool) -> &mut SearcherBuilder {
         self.config.invert_match = yes;
         self
@@ -148,26 +152,31 @@ impl SearcherBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn after_context(&mut self, line_count: usize) -> &mut SearcherBuilder {
         self.config.after_context = line_count;
         self
     }
 
+    #[allow(dead_code)]
     pub fn before_context(&mut self, line_count: usize) -> &mut SearcherBuilder {
         self.config.before_context = line_count;
         self
     }
 
+    #[allow(dead_code)]
     pub fn passthru(&mut self, yes: bool) -> &mut SearcherBuilder {
         self.config.passthru = yes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn heap_limit(&mut self, bytes: Option<usize>) -> &mut SearcherBuilder {
         self.config.heap_limit = bytes;
         self
     }
 
+    #[allow(dead_code)]
     pub fn memory_map(&mut self, strategy: MmapChoice) -> &mut SearcherBuilder {
         self.config.mmap = strategy;
         self
@@ -183,6 +192,7 @@ pub struct Searcher {
 }
 
 impl Searcher {
+    #[allow(dead_code)]
     pub fn new() -> Searcher {
         SearcherBuilder::new().build()
     }
@@ -202,6 +212,7 @@ impl Searcher {
         self.search_file_maybe_path(query_context, Some(path), &file, write_to)
     }
 
+    #[allow(dead_code)]
     pub fn search_file<S>(
         &mut self,
         query_context: QueryContext,
@@ -240,6 +251,7 @@ impl Searcher {
         .run()
     }
 
+    #[allow(dead_code)]
     pub fn search_reader<R, S>(
         &mut self,
         query_context: QueryContext,
@@ -300,11 +312,13 @@ impl Searcher {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn invert_match(&self) -> bool {
         self.config.invert_match
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn line_number(&self) -> bool {
         self.config.line_number
     }
@@ -315,11 +329,13 @@ impl Searcher {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn before_context(&self) -> usize {
         self.config.before_context
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn passthru(&self) -> bool {
         self.config.passthru
     }

@@ -20,10 +20,12 @@ impl Default for MmapChoice {
 }
 
 impl MmapChoice {
+    #[allow(dead_code)]
     pub unsafe fn auto() -> MmapChoice {
         MmapChoice(MmapChoiceImpl::Auto)
     }
 
+    #[allow(dead_code)]
     pub fn never() -> MmapChoice {
         MmapChoice(MmapChoiceImpl::Never)
     }
