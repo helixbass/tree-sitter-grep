@@ -5,8 +5,7 @@ use std::{
 
 use super::util::NiceDuration;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-#[cfg_attr(feature = "serde1", derive(serde::Serialize))]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Stats {
     elapsed: NiceDuration,
     searches: u64,

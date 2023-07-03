@@ -151,64 +151,6 @@ impl Default for LineTerminator {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ByteSet(BitSet);
-
-#[derive(Clone, Copy)]
-struct BitSet([u64; 4]);
-
-impl fmt::Debug for BitSet {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut fmtd = f.debug_set();
-        for b in (0..256).map(|b| b as u8) {
-            if ByteSet(*self).contains(b) {
-                fmtd.entry(&b);
-            }
-        }
-        fmtd.finish()
-    }
-}
-
-impl ByteSet {
-    pub fn empty() -> ByteSet {
-        ByteSet(BitSet([0; 4]))
-    }
-
-    pub fn full() -> ByteSet {
-        ByteSet(BitSet([u64::MAX; 4]))
-    }
-
-    pub fn add(&mut self, byte: u8) {
-        let bucket = byte / 64;
-        let bit = byte % 64;
-        (self.0).0[bucket as usize] |= 1 << bit;
-    }
-
-    pub fn add_all(&mut self, start: u8, end: u8) {
-        for b in (start as u64..end as u64 + 1).map(|b| b as u8) {
-            self.add(b);
-        }
-    }
-
-    pub fn remove(&mut self, byte: u8) {
-        let bucket = byte / 64;
-        let bit = byte % 64;
-        (self.0).0[bucket as usize] &= !(1 << bit);
-    }
-
-    pub fn remove_all(&mut self, start: u8, end: u8) {
-        for b in (start as u64..end as u64 + 1).map(|b| b as u8) {
-            self.remove(b);
-        }
-    }
-
-    pub fn contains(&self, byte: u8) -> bool {
-        let bucket = byte / 64;
-        let bit = byte % 64;
-        (self.0).0[bucket as usize] & (1 << bit) > 0
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct NoError(());
 
