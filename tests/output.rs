@@ -1150,7 +1150,7 @@ fn test_nonexistent_directory_specified() {
 //     assert_failure_output(
 //         "mixed_project",
 //         r#"
-//             $ tree-sitter-grep -q '(function_item) @f'
+//             $ tree-sitter-grep -q '(function_item) @f' --language rust
 // javascript_src/index.js             ...?
 //         "#,
 //     );
