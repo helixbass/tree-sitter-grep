@@ -1067,3 +1067,91 @@ fn test_before_and_after_context() {
         "#,
     );
 }
+
+#[test]
+fn test_no_files_searched_directory_path_argument_with_no_recognized_file_types() {
+    assert_failure_output(
+        "no_recognized_file_types",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' subdir/
+            No files were searched
+        "#,
+    );
+}
+
+#[test]
+fn test_no_files_searched_no_recognized_file_types() {
+    assert_failure_output(
+        "no_recognized_file_types",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f'
+            No files were searched
+        "#,
+    );
+}
+
+#[test]
+fn test_no_files_searched_recognized_files_but_dont_match_specified_language() {
+    assert_failure_output(
+        "typescript_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' --language rust
+            No files were searched
+        "#,
+    );
+}
+
+#[test]
+fn test_couldnt_parse_more_than_two_candidate_auto_detected_languages() {
+    assert_failure_output(
+        "mixed_project",
+        r#"
+            $ tree-sitter-grep -q '(function_itemz) @f'
+            error: couldn't parse query for Javascript, Rust or Typescript
+        "#,
+    );
+}
+
+#[test]
+fn test_couldnt_parse_two_candidate_auto_detected_languages() {
+    assert_failure_output(
+        "mixed_project",
+        r#"
+            $ tree-sitter-grep -q '(function_itemz) @f' javascript_src/ typescript_src/
+            error: couldn't parse query for Javascript or Typescript
+        "#,
+    );
+}
+
+#[test]
+fn test_nonexistent_file_specified() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' src/nonexistent.rs
+            src/nonexistent.rs: No such file or directory (os error 2)
+        "#,
+    );
+}
+
+#[test]
+fn test_nonexistent_directory_specified() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' srcz/
+            srcz/: No such file or directory (os error 2)
+        "#,
+    );
+}
+
+// #[test]
+// fn test_specify_explicit_file_but_dont_match_specified_language() {
+//     assert_failure_output(
+//         "mixed_project",
+//         r#"
+//             $ tree-sitter-grep -q '(function_item) @f'
+// javascript_src/index.js             ...?
+//         "#,
+//     );
+// }

@@ -185,10 +185,12 @@ pub fn run(args: Args) {
             buffer_writer.print(printer.get_mut()).unwrap();
         });
 
-    if !searched.load(Ordering::SeqCst) {
-        eprint_nothing_searched();
-    } else {
-        cached_queries.error_if_no_successful_query_parsing();
+    if !messages::errored() {
+        if !searched.load(Ordering::SeqCst) {
+            eprint_nothing_searched();
+        } else {
+            cached_queries.error_if_no_successful_query_parsing();
+        }
     }
 
     if messages::errored() {
