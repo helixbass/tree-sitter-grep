@@ -1,3 +1,5 @@
+#![allow(clippy::into_iter_on_ref)]
+
 use std::{
     collections::HashMap,
     fmt, fs,
@@ -11,6 +13,7 @@ use std::{
     time::Duration,
 };
 
+use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use tree_sitter::Query;
@@ -33,12 +36,8 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
-use language::{
-    get_all_supported_languages, maybe_supported_language_from_path, SupportedLanguage,
-    SupportedLanguageName,
-};
+use language::{SupportedLanguage, SupportedLanguageName, ALL_SUPPORTED_LANGUAGES};
 pub use plugin::PluginInitializeReturn;
-use project_file_walker::get_project_file_parallel_iterator;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
 use use_printer::get_printer;
@@ -91,12 +90,12 @@ impl CachedQueries {
     fn get_and_cache_query_for_language(
         &self,
         query_source: &str,
-        language: &dyn SupportedLanguage,
+        language: SupportedLanguage,
     ) -> Option<Arc<Query>> {
         self.0
-            .get(&language.name())
+            .get(&language.name)
             .unwrap()
-            .get_or_init(|| maybe_get_query(query_source, language.language()).map(Arc::new))
+            .get_or_init(|| maybe_get_query(query_source, language.language).map(Arc::new))
             .clone()
     }
 
@@ -128,9 +127,9 @@ impl CachedQueries {
 impl Default for CachedQueries {
     fn default() -> Self {
         Self(
-            get_all_supported_languages()
-                .into_keys()
-                .map(|supported_language_name| (supported_language_name, Default::default()))
+            ALL_SUPPORTED_LANGUAGES
+                .iter()
+                .map(|supported_language| (supported_language.name, Default::default()))
                 .collect(),
         )
     }
@@ -144,20 +143,56 @@ pub fn run(args: Args) {
         (None, None) => ALL_NODES_QUERY.to_owned(),
         _ => unreachable!(),
     };
-    let specified_supported_language = args.language.map(|language| language.get_language());
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
 
-    get_project_file_parallel_iterator(specified_supported_language.as_deref(), &args.use_paths())
-        .for_each(|project_file_dir_entry| {
+    args.get_project_file_parallel_iterator().for_each(
+        |(project_file_dir_entry, matched_languages)| {
             searched.store(true, Ordering::SeqCst);
-            let language = maybe_supported_language_from_path(project_file_dir_entry.path())
-                .expect("Walker should've been pre-filtered to just supported file types");
+            if matched_languages.is_empty() {
+                error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
+                return;
+            }
+            let language = return_if_none!(if matched_languages.len() > 1
+                && args.language().is_none()
+            {
+                let mut successfully_parsed_query_languages =
+                    matched_languages.iter().filter_map(|&matched_language| {
+                        cached_queries
+                            .get_and_cache_query_for_language(&query_source, matched_language)
+                            .map(|_| matched_language)
+                    });
+                let maybe_first_matched_language = successfully_parsed_query_languages.next();
+                match maybe_first_matched_language {
+                    Some(first_matched_language) => {
+                        let second_matched_language = successfully_parsed_query_languages.next();
+                        if let Some(second_matched_language) = second_matched_language {
+                            let mut all_matched_languages =
+                                vec![first_matched_language, second_matched_language];
+                            all_matched_languages.extend(successfully_parsed_query_languages);
+                            error_disambiguate_language_for_file(
+                                &project_file_dir_entry,
+                                &all_matched_languages,
+                            );
+                            return;
+                        }
+                        Some(first_matched_language)
+                    }
+                    None => None,
+                }
+            } else {
+                matched_languages.into_iter().find(|matched_language| {
+                    !matches!(
+                        args.language(),
+                        Some(specified_language) if specified_language != *matched_language
+                    )
+                })
+            });
             let query = return_if_none!(
-                cached_queries.get_and_cache_query_for_language(&query_source, &*language)
+                cached_queries.get_and_cache_query_for_language(&query_source, language)
             );
             let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref());
             let printer = get_printer(&buffer_writer, &args);
@@ -168,7 +203,7 @@ pub fn run(args: Args) {
             let query_context = QueryContext::new(
                 query,
                 capture_index,
-                language.language(),
+                language.language,
                 args.filter.clone(),
                 args.filter_arg.clone(),
             );
@@ -183,7 +218,8 @@ pub fn run(args: Args) {
                 matched.store(true, Ordering::SeqCst);
             }
             buffer_writer.print(printer.get_mut()).unwrap();
-        });
+        },
+    );
 
     if !messages::errored() {
         if !searched.load(Ordering::SeqCst) {
@@ -204,6 +240,43 @@ pub fn run(args: Args) {
 
 fn eprint_nothing_searched() {
     err_message!("No files were searched");
+}
+
+fn error_explicit_path_argument_not_of_known_type(project_file_dir_entry: &DirEntry) {
+    // TODO: assert the assumed invariant that this was in fact an explicitly-passed
+    // path?
+    err_message!(
+        "File not of known type: {:?}",
+        project_file_dir_entry.path()
+    );
+}
+
+#[macro_export]
+macro_rules! only_run_once {
+    ($block:block) => {
+        static ONCE_LOCK: std::sync::OnceLock<()> = OnceLock::new();
+        ONCE_LOCK.get_or_init(|| {
+            $block;
+        });
+    };
+}
+
+fn error_disambiguate_language_for_file(
+    project_file_dir_entry: &DirEntry,
+    all_matched_languages: &[SupportedLanguage],
+) {
+    only_run_once!({
+        err_message!(
+            "File {:?} has ambiguous file-type, could be {}",
+            project_file_dir_entry.path(),
+            join_with_or(
+                &all_matched_languages
+                    .into_iter()
+                    .map(|matched_language| format!("{:?}", matched_language.name))
+                    .collect::<Vec<_>>()
+            )
+        );
+    });
 }
 
 fn fail(message: &str) -> ! {

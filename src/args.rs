@@ -1,11 +1,16 @@
 use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser};
+use ignore::{types::Types, WalkBuilder, WalkParallel};
+use rayon::iter::IterBridge;
 use termcolor::BufferWriter;
 
 use crate::{
-    language::SupportedLanguageName,
+    language::{SupportedLanguage, SupportedLanguageName},
     printer::StandardBuilder,
+    project_file_walker::{
+        get_project_file_walker_types, into_parallel_iterator, WalkParallelIterator,
+    },
     searcher::{Searcher, SearcherBuilder},
     use_printer::Printer,
 };
@@ -52,7 +57,7 @@ pub struct Args {
 }
 
 impl Args {
-    pub(crate) fn use_paths(&self) -> Vec<PathBuf> {
+    fn use_paths(&self) -> Vec<PathBuf> {
         if self.paths.is_empty() {
             vec![Path::new("./").to_owned()]
         } else {
@@ -107,5 +112,28 @@ impl Args {
             .per_match_one_line(self.per_match_one_line())
             .column(self.column())
             .build(buffer_writer.buffer())
+    }
+
+    pub(crate) fn language(&self) -> Option<SupportedLanguage> {
+        self.language.map(|language| language.get_language())
+    }
+
+    pub(crate) fn get_project_file_walker_types(&self) -> Types {
+        get_project_file_walker_types(self.language())
+    }
+
+    pub(crate) fn get_project_file_walker(&self) -> WalkParallel {
+        let paths = self.use_paths();
+        assert!(!paths.is_empty());
+        let mut builder = WalkBuilder::new(&paths[0]);
+        builder.types(self.get_project_file_walker_types());
+        for path in &paths[1..] {
+            builder.add(path);
+        }
+        builder.build_parallel()
+    }
+
+    pub(crate) fn get_project_file_parallel_iterator(&self) -> IterBridge<WalkParallelIterator> {
+        into_parallel_iterator(self.get_project_file_walker())
     }
 }
