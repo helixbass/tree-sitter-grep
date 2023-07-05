@@ -95,21 +95,39 @@ fn parse_command_line(command_line: &str) -> Vec<String> {
         .collect()
 }
 
-fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
+fn assert_sorted_output_with_exit_code(
+    fixture_dir_name: &str,
+    command_and_output: &str,
+    failure_code: Option<i32>,
+) {
     let CommandAndOutput {
         mut command_line_args,
         output,
     } = parse_command_and_output(command_and_output);
     let command_name = command_line_args.remove(0);
-    Command::cargo_bin(command_name)
-        .unwrap()
+    let mut command = Command::cargo_bin(command_name).unwrap();
+    command
         .args(command_line_args)
-        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
-        .assert()
-        .success()
-        .stdout(predicate::function(|actual_output| {
-            do_sorted_lines_match(actual_output, &output)
-        }));
+        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name));
+    let command = if let Some(failure_code) = failure_code {
+        command.assert().failure().code(failure_code)
+    } else {
+        command.assert().success()
+    };
+    command.stdout(predicate::function(|actual_output| {
+        do_sorted_lines_match(actual_output, &output)
+    }));
+}
+
+fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
+    assert_sorted_output_with_exit_code(fixture_dir_name, command_and_output, None);
+}
+
+fn assert_sorted_output_with_no_matches_exit_status(
+    fixture_dir_name: &str,
+    command_and_output: &str,
+) {
+    assert_sorted_output_with_exit_code(fixture_dir_name, command_and_output, Some(1));
 }
 
 fn massage_windows_line(line: &str) -> String {
@@ -154,6 +172,7 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
         .assert()
         .failure()
+        .code(2)
         .stderr(predicate::function(|stderr: &str| {
             let stderr = massage_error_output(stderr);
             stderr == output
@@ -346,7 +365,7 @@ fn test_invalid_query_inline() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-source '(function_itemz) @function_item' --language rust
-            error: invalid query
+            error: couldn't parse query for Rust
         "#,
     );
 }
@@ -357,7 +376,7 @@ fn test_invalid_query_file() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-file ./function-itemz.scm --language rust
-            error: invalid query
+            error: couldn't parse query for Rust
         "#,
     );
 }
@@ -481,7 +500,7 @@ fn test_predicate() {
 
 #[test]
 fn test_no_matches() {
-    assert_sorted_output(
+    assert_sorted_output_with_no_matches_exit_status(
         "rust_project",
         r#"
             $ tree-sitter-grep --query-source '(function_item name: (identifier) @name (#eq? @name "addz")) @function_item' --language rust
