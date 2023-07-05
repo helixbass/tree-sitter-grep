@@ -1151,7 +1151,26 @@ fn test_nonexistent_directory_specified() {
 //         "mixed_project",
 //         r#"
 //             $ tree-sitter-grep -q '(function_item) @f' --language rust
-// javascript_src/index.js             ...?
+// javascript_src/index.js         "#,
+//     );
+// }
+
+// #[test]
+// fn test_specify_explicit_file_of_unrecognized_file_type() {
+//     assert_failure_output(
+//         "no_recognized_file_types",
+//         r#"
+//             $ tree-sitter-grep -q '(function_item) @f' something.scala
 //         "#,
+//     );
+// }
+
+// #[test]
+// fn test_specify_explicit_file_of_unrecognized_file_type_and_language_flag() {
+//     assert_failure_output(
+//         "no_recognized_file_types",
+//         r#"
+//             $ tree-sitter-grep -q '(function_item) @f' --language rust
+// something.scala         "#,
 //     );
 // }
