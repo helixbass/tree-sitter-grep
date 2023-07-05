@@ -1,6 +1,7 @@
+// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/core/messages.rs
+
 use std::sync::atomic::{AtomicBool, Ordering};
 
-// derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/core/messages.rs
 static ERRORED: AtomicBool = AtomicBool::new(false);
 
 #[macro_export]
