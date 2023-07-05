@@ -2,15 +2,12 @@ use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser};
 use ignore::{types::Types, WalkBuilder, WalkParallel};
-use rayon::iter::IterBridge;
 use termcolor::BufferWriter;
 
 use crate::{
     language::{SupportedLanguage, SupportedLanguageName},
     printer::StandardBuilder,
-    project_file_walker::{
-        get_project_file_walker_types, into_parallel_iterator, WalkParallelIterator,
-    },
+    project_file_walker::get_project_file_walker_types,
     searcher::{Searcher, SearcherBuilder},
     use_printer::Printer,
 };
@@ -131,9 +128,5 @@ impl Args {
             builder.add(path);
         }
         builder.build_parallel()
-    }
-
-    pub(crate) fn get_project_file_parallel_iterator(&self) -> IterBridge<WalkParallelIterator> {
-        into_parallel_iterator(self.get_project_file_walker())
     }
 }

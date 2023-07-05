@@ -13,8 +13,7 @@ use std::{
     time::Duration,
 };
 
-use ignore::DirEntry;
-use rayon::prelude::*;
+use ignore::{DirEntry, WalkState};
 use termcolor::{BufferWriter, ColorChoice};
 use tree_sitter::Query;
 
@@ -36,7 +35,10 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
-use language::{SupportedLanguage, SupportedLanguageName, ALL_SUPPORTED_LANGUAGES};
+use language::{
+    SupportedLanguage, SupportedLanguageName, ALL_SUPPORTED_LANGUAGES,
+    ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT,
+};
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
@@ -149,77 +151,139 @@ pub fn run(args: Args) {
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
 
-    args.get_project_file_parallel_iterator().for_each(
-        |(project_file_dir_entry, matched_languages)| {
-            searched.store(true, Ordering::SeqCst);
-            if matched_languages.is_empty() {
-                error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
-                return;
-            }
-            let language = return_if_none!(if matched_languages.len() > 1
-                && args.language().is_none()
-            {
-                let mut successfully_parsed_query_languages =
-                    matched_languages.iter().filter_map(|&matched_language| {
-                        cached_queries
-                            .get_and_cache_query_for_language(&query_source, matched_language)
-                            .map(|_| matched_language)
-                    });
-                let maybe_first_matched_language = successfully_parsed_query_languages.next();
-                match maybe_first_matched_language {
-                    Some(first_matched_language) => {
-                        let second_matched_language = successfully_parsed_query_languages.next();
-                        if let Some(second_matched_language) = second_matched_language {
-                            let mut all_matched_languages =
-                                vec![first_matched_language, second_matched_language];
-                            all_matched_languages.extend(successfully_parsed_query_languages);
-                            error_disambiguate_language_for_file(
-                                &project_file_dir_entry,
-                                &all_matched_languages,
-                            );
-                            return;
+    let walk_parallel = args.get_project_file_walker();
+    let ignore = &walk_parallel.ignore();
+    walk_parallel.run({
+        let matched = &matched;
+        let searched = &searched;
+        let cached_queries = &cached_queries;
+        let capture_index = &capture_index;
+        let buffer_writer = &buffer_writer;
+        let query_source = &query_source;
+        let args = &args;
+        move || {
+            Box::new({
+                move |entry_and_match_metadata| {
+                    let (entry, match_metadata) = match entry_and_match_metadata {
+                        Err(err) => {
+                            err_message!("{err}");
+                            return WalkState::Continue;
                         }
-                        Some(first_matched_language)
+                        Ok(entry_and_match_metadata) => entry_and_match_metadata,
+                    };
+                    if !entry.metadata().unwrap().is_file() {
+                        return WalkState::Continue;
                     }
-                    None => None,
+                    let matched_languages = match_metadata
+                        .or_else(|| {
+                            ignore
+                                .should_skip_entry_with_match_metadata_token(&entry)
+                                .1
+                                .map(|match_metadata_token| {
+                                    ignore.get_match_metadata(match_metadata_token)
+                                })
+                        })
+                        .map(|match_metadata| {
+                            match_metadata
+                                .matching_file_types
+                                .map(|file_type_def| {
+                                    ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT
+                                        .get(&file_type_def.name())
+                                        .copied()
+                                        .unwrap()
+                                })
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    let project_file_dir_entry = entry;
+                    searched.store(true, Ordering::SeqCst);
+                    if matched_languages.is_empty() {
+                        error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
+                        return WalkState::Continue;
+                    }
+                    let maybe_single_matched_language =
+                        if matched_languages.len() > 1 && args.language().is_none() {
+                            let mut successfully_parsed_query_languages =
+                                matched_languages.iter().filter_map(|&matched_language| {
+                                    cached_queries
+                                        .get_and_cache_query_for_language(
+                                            query_source,
+                                            matched_language,
+                                        )
+                                        .map(|_| matched_language)
+                                });
+                            let maybe_first_matched_language =
+                                successfully_parsed_query_languages.next();
+                            match maybe_first_matched_language {
+                                Some(first_matched_language) => {
+                                    let second_matched_language =
+                                        successfully_parsed_query_languages.next();
+                                    if let Some(second_matched_language) = second_matched_language {
+                                        let mut all_matched_languages =
+                                            vec![first_matched_language, second_matched_language];
+                                        all_matched_languages
+                                            .extend(successfully_parsed_query_languages);
+                                        error_disambiguate_language_for_file(
+                                            &project_file_dir_entry,
+                                            &all_matched_languages,
+                                        );
+                                        return WalkState::Continue;
+                                    }
+                                    Some(first_matched_language)
+                                }
+                                None => None,
+                            }
+                        } else {
+                            matched_languages.into_iter().find(|matched_language| {
+                        !matches!(
+                            args.language(),
+                            Some(specified_language) if specified_language != *matched_language
+                        )
+                    })
+                        };
+                    let language = match maybe_single_matched_language {
+                        None => return WalkState::Continue,
+                        Some(language) => language,
+                    };
+                    let query = match cached_queries
+                        .get_and_cache_query_for_language(query_source, language)
+                    {
+                        None => return WalkState::Continue,
+                        Some(query) => query,
+                    };
+                    let capture_index =
+                        capture_index.get_or_init(&query, args.capture_name.as_deref());
+                    let printer = get_printer(buffer_writer, args);
+                    let mut printer = printer.borrow_mut();
+                    let path = format_relative_path(
+                        project_file_dir_entry.path(),
+                        args.is_using_default_paths(),
+                    );
+
+                    let query_context = QueryContext::new(
+                        query,
+                        capture_index,
+                        language.language,
+                        args.filter.clone(),
+                        args.filter_arg.clone(),
+                    );
+
+                    printer.get_mut().clear();
+                    let mut sink = printer.sink_with_path(path);
+                    get_searcher(args)
+                        .borrow_mut()
+                        .search_path(query_context, path, &mut sink)
+                        .unwrap();
+                    if sink.has_match() {
+                        matched.store(true, Ordering::SeqCst);
+                    }
+                    buffer_writer.print(printer.get_mut()).unwrap();
+
+                    WalkState::Continue
                 }
-            } else {
-                matched_languages.into_iter().find(|matched_language| {
-                    !matches!(
-                        args.language(),
-                        Some(specified_language) if specified_language != *matched_language
-                    )
-                })
-            });
-            let query = return_if_none!(
-                cached_queries.get_and_cache_query_for_language(&query_source, language)
-            );
-            let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref());
-            let printer = get_printer(&buffer_writer, &args);
-            let mut printer = printer.borrow_mut();
-            let path =
-                format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
-
-            let query_context = QueryContext::new(
-                query,
-                capture_index,
-                language.language,
-                args.filter.clone(),
-                args.filter_arg.clone(),
-            );
-
-            printer.get_mut().clear();
-            let mut sink = printer.sink_with_path(path);
-            get_searcher(&args)
-                .borrow_mut()
-                .search_path(query_context, path, &mut sink)
-                .unwrap();
-            if sink.has_match() {
-                matched.store(true, Ordering::SeqCst);
-            }
-            buffer_writer.print(printer.get_mut()).unwrap();
-        },
-    );
+            })
+        }
+    });
 
     if !messages::errored() {
         if !searched.load(Ordering::SeqCst) {
