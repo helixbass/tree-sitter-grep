@@ -199,7 +199,10 @@ fn assert_non_match_output(fixture_dir_name: &str, command_and_output: &str) {
 
 fn massage_error_output(output: &str) -> String {
     if cfg!(windows) {
-        output.replace(".exe", "")
+        output.replace(".exe", "").replace(
+            "The system cannot find the file specified.",
+            "No such file or directory",
+        )
     } else {
         output.to_owned()
     }
