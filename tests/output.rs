@@ -407,7 +407,7 @@ fn test_invalid_language_name() {
         r#"
             $ tree-sitter-grep --query-source '(function_item) @function_item' --language rustz
             error: invalid value 'rustz' for '--language <LANGUAGE>'
-              [possible values: rust, typescript, javascript]
+              [possible values: rust, typescript, javascript, swift, objective-c, toml, python, ruby, c, cpp, go, java, c-sharp, kotlin, elisp, elm, dockerfile, html, tree-sitter-query, json, css, lua]
 
               tip: a similar value exists: 'rust'
 
@@ -641,16 +641,27 @@ fn test_help_option() {
 
             Options:
               -Q, --query-file <PATH_TO_QUERY_FILE>
+
               -q, --query-source <QUERY_SOURCE>
+
               -c, --capture <CAPTURE_NAME>
-              -l, --language <LANGUAGE>              [possible values: rust, typescript, javascript]
+
+              -l, --language <LANGUAGE>
+                      [possible values: rust, typescript, javascript, swift, objective-c, toml, python, ruby, c, cpp, go, java, c-sharp, kotlin, elisp, elm, dockerfile, html, tree-sitter-query, json, css, lua]
               -f, --filter <FILTER>
+
               -a, --filter-arg <FILTER_ARG>
+
                   --vimgrep
+
               -A, --after-context <NUM>
+
               -B, --before-context <NUM>
+
               -C, --context <NUM>
-              -h, --help                             Print help
+
+              -h, --help
+                      Print help
         "#,
     );
 }
