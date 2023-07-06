@@ -38,7 +38,7 @@ impl SupportedLanguageName {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SupportedLanguage {
     pub language: Language,
     pub name: SupportedLanguageName,
