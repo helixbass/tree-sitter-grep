@@ -153,7 +153,17 @@ pub fn run(args: Args) {
         |(project_file_dir_entry, matched_languages)| {
             searched.store(true, Ordering::SeqCst);
             if matched_languages.is_empty() {
-                error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
+                match args.language() {
+                    Some(language) => {
+                        error_explicit_path_argument_not_of_specified_type(
+                            &project_file_dir_entry,
+                            language,
+                        );
+                    }
+                    None => {
+                        error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
+                    }
+                }
                 return;
             }
             let language = return_if_none!(if matched_languages.len() > 1
@@ -246,8 +256,21 @@ fn error_explicit_path_argument_not_of_known_type(project_file_dir_entry: &DirEn
     // TODO: assert the assumed invariant that this was in fact an explicitly-passed
     // path?
     err_message!(
-        "File not of known type: {:?}",
+        "File {:?} does not belong to a recognized language",
         project_file_dir_entry.path()
+    );
+}
+
+fn error_explicit_path_argument_not_of_specified_type(
+    project_file_dir_entry: &DirEntry,
+    language: SupportedLanguage,
+) {
+    // TODO: assert the assumed invariant that this was in fact an explicitly-passed
+    // path?
+    err_message!(
+        "File {:?} is not recognized as a {:?} file",
+        project_file_dir_entry.path(),
+        language.name
     );
 }
 
