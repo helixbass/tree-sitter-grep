@@ -317,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query-source'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching>
 
             For more information, try '--help'.
         "#,
@@ -444,6 +444,8 @@ fn test_help_option() {
               -B, --before-context <NUM>
 
               -C, --context <NUM>
+
+              -o, --only-matching
 
               -h, --help
                       Print help
@@ -973,6 +975,59 @@ fn test_specify_explicit_file_of_unrecognized_file_type_and_language_flag() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' --language rust something.scala
             File "something.scala" is not recognized as a Rust file
+        "#,
+    );
+}
+
+#[test]
+fn test_only_matching() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(parameter) @c' --language rust --only-matching
+            src/lib.rs:3:left: usize
+            src/lib.rs:3:right: usize
+        "#,
+    );
+}
+
+#[test]
+fn test_only_matching_short_option() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep --query-source '(parameter) @c' --language rust -o
+            src/lib.rs:3:left: usize
+            src/lib.rs:3:right: usize
+        "#,
+    );
+}
+
+#[test]
+fn test_only_matching_multiline_overlapping_matches() {
+    assert_sorted_output(
+        "rust_overlapping",
+        r#"
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --only-matching
+            src/lib.rs:2:|| {
+            src/lib.rs:3:        || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_only_matching_multiline_overlapping_matches_starting_on_same_line() {
+    assert_sorted_output(
+        "rust_overlapping_start_same_line",
+        r#"
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --only-matching
+            src/lib.rs:3:|| { || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    }
         "#,
     );
 }
