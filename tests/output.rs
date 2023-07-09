@@ -1242,7 +1242,7 @@ fn test_objective_c_auto_language_ambiguous_query() {
         "objective_c_project",
         r#"
             $ tree-sitter-grep -q '(identifier) @c'
-            File "./example.h" has ambiguous file-type, could be ObjectiveC, C or Cpp. Try passing the --language flag
+            File "./example.h" has ambiguous file-type, could be ObjectiveC, C, or Cpp. Try passing the --language flag
         "#,
     );
 }
@@ -1336,7 +1336,7 @@ fn test_c_auto_language() {
         "c_project",
         r#"
             $ tree-sitter-grep -q '(pointer_declarator) @c'
-            File "./example.h" has ambiguous file-type, could be ObjectiveC, C or Cpp. Try passing the --language flag
+            File "./example.h" has ambiguous file-type, could be ObjectiveC, C, or Cpp. Try passing the --language flag
         "#,
     );
 }
