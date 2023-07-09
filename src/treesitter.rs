@@ -1,4 +1,4 @@
-use tree_sitter::{Language, Node, Parser, Query};
+use tree_sitter::{Language, Node, Parser, Query, QueryError};
 
 use crate::matcher::Match;
 
@@ -10,8 +10,8 @@ pub(crate) fn get_parser(language: Language) -> Parser {
     parser
 }
 
-pub(crate) fn maybe_get_query(source: &str, language: Language) -> Option<Query> {
-    Query::new(language, source).ok()
+pub(crate) fn maybe_get_query(source: &str, language: Language) -> Result<Query, QueryError> {
+    Query::new(language, source)
 }
 
 impl From<&'_ Node<'_>> for Match {
