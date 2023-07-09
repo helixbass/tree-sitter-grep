@@ -16,7 +16,7 @@ use std::{
 use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
-use tree_sitter::Query;
+use tree_sitter::{Query, QueryError};
 
 mod args;
 mod language;
@@ -78,13 +78,13 @@ fn join_with_or<TItem: fmt::Display>(list: &[TItem]) -> String {
         if list.len() >= 2 && index < list.len() - 2 {
             ret.push_str(", ");
         } else if list.len() >= 2 && index == list.len() - 2 {
-            ret.push_str(" or ");
+            ret.push_str(if list.len() == 2 { " or " } else { ", or " });
         }
     }
     ret
 }
 
-struct CachedQueries(HashMap<SupportedLanguageName, OnceLock<Option<Arc<Query>>>>);
+struct CachedQueries(HashMap<SupportedLanguageName, OnceLock<Result<Arc<Query>, QueryError>>>);
 
 impl CachedQueries {
     fn get_and_cache_query_for_language(
@@ -96,30 +96,45 @@ impl CachedQueries {
             .get(&language.name)
             .unwrap()
             .get_or_init(|| maybe_get_query(query_source, language.language).map(Arc::new))
-            .clone()
+            .as_ref()
+            .ok()
+            .cloned()
     }
 
     fn error_if_no_successful_query_parsing(&self) {
-        if !self
-            .0
-            .values()
-            .any(|query| query.get().and_then(|option| option.as_ref()).is_some())
-        {
-            let mut attempted_parsings = self
+        if !self.0.values().any(|query| {
+            query
+                .get()
+                .and_then(|result| result.as_ref().ok())
+                .is_some()
+        }) {
+            let attempted_parsings = self
                 .0
                 .iter()
                 .filter(|(_, value)| value.get().is_some())
-                .map(|(supported_language_name, _)| format!("{supported_language_name:?}"))
                 .collect::<Vec<_>>();
             assert!(
                 !attempted_parsings.is_empty(),
                 "Should've tried to parse in at least one language or else should've already failed on no candidate files"
             );
-            attempted_parsings.sort();
-            fail(&format!(
-                "couldn't parse query for {}",
-                join_with_or(&attempted_parsings)
-            ));
+            if attempted_parsings.len() == 1 {
+                let (&supported_language_name, once_lock) = &attempted_parsings[0];
+                fail(&format!(
+                    "couldn't parse query for {:?}: {}",
+                    supported_language_name,
+                    once_lock.get().unwrap().as_ref().unwrap_err()
+                ));
+            } else {
+                let mut attempted_parsings = attempted_parsings
+                    .into_iter()
+                    .map(|(supported_language_name, _)| format!("{supported_language_name:?}"))
+                    .collect::<Vec<_>>();
+                attempted_parsings.sort();
+                fail(&format!(
+                    "couldn't parse query for {}",
+                    join_with_or(&attempted_parsings)
+                ));
+            }
         }
     }
 }
@@ -240,11 +255,11 @@ pub fn run(args: Args) {
     }
 
     if messages::errored() {
-        process::exit(2);
+        exit(ExitCode::Error);
     } else if matched.load(Ordering::SeqCst) {
-        process::exit(0);
+        exit(ExitCode::Success);
     } else {
-        process::exit(1);
+        exit(ExitCode::NoMatches);
     }
 }
 
@@ -304,7 +319,7 @@ fn error_disambiguate_language_for_file(
 
 fn fail(message: &str) -> ! {
     eprintln!("error: {message}");
-    process::exit(2);
+    exit(ExitCode::Error);
 }
 
 fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
@@ -313,4 +328,15 @@ fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
     } else {
         path
     }
+}
+
+#[derive(Copy, Clone)]
+enum ExitCode {
+    Success = 0,
+    NoMatches = 1,
+    Error = 2,
+}
+
+fn exit(exit_code: ExitCode) -> ! {
+    process::exit(exit_code as i32);
 }
