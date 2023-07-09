@@ -79,7 +79,7 @@ fn join_with_or<TItem: fmt::Display>(list: &[TItem]) -> String {
         if list.len() >= 2 && index < list.len() - 2 {
             ret.push_str(", ");
         } else if list.len() >= 2 && index == list.len() - 2 {
-            ret.push_str(" or ");
+            ret.push_str(if list.len() == 2 { " or " } else { ", or " });
         }
     }
     ret
