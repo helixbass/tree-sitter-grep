@@ -194,11 +194,11 @@ pub fn run(args: Args) {
     }
 
     if messages::errored() {
-        process::exit(2);
+        exit(ExitCode::Error);
     } else if matched.load(Ordering::SeqCst) {
-        process::exit(0);
+        exit(ExitCode::Success);
     } else {
-        process::exit(1);
+        exit(ExitCode::NoMatches);
     }
 }
 
@@ -217,4 +217,15 @@ fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
     } else {
         path
     }
+}
+
+#[derive(Copy, Clone)]
+enum ExitCode {
+    Success = 0,
+    NoMatches = 1,
+    Error = 2,
+}
+
+fn exit(exit_code: ExitCode) -> ! {
+    process::exit(exit_code as i32);
 }
