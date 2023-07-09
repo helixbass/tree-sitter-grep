@@ -13,8 +13,9 @@ use rayon::{iter::IterBridge, prelude::*};
 use crate::{
     err_message,
     language::{
-        SupportedLanguage, ALL_SUPPORTED_LANGUAGES,
+        get_supported_language_name_for_ignore_select, SupportedLanguage,
         ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT,
+        SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT,
     },
 };
 
@@ -94,10 +95,10 @@ pub(crate) fn get_project_file_walker_types(language: Option<SupportedLanguage>)
     let mut types_builder = TypesBuilder::new();
     types_builder.add_defaults();
     if let Some(language) = language {
-        types_builder.select(language.name_for_ignore_select);
+        types_builder.select(get_supported_language_name_for_ignore_select(language));
     } else {
-        for language in ALL_SUPPORTED_LANGUAGES.iter() {
-            types_builder.select(language.name_for_ignore_select);
+        for name_for_ignore_select in SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT.iter() {
+            types_builder.select(name_for_ignore_select);
         }
     }
     types_builder.build().unwrap()

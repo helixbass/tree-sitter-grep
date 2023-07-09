@@ -6,7 +6,7 @@ use rayon::iter::IterBridge;
 use termcolor::BufferWriter;
 
 use crate::{
-    language::{SupportedLanguage, SupportedLanguageName},
+    language::SupportedLanguage,
     printer::StandardBuilder,
     project_file_walker::{
         get_project_file_walker_types, into_parallel_iterator, WalkParallelIterator,
@@ -35,7 +35,7 @@ pub struct Args {
     pub capture_name: Option<String>,
 
     #[arg(short, long, value_enum)]
-    language: Option<SupportedLanguageName>,
+    pub language: Option<SupportedLanguage>,
 
     #[arg(short, long)]
     pub filter: Option<String>,
@@ -114,12 +114,8 @@ impl Args {
             .build(buffer_writer.buffer())
     }
 
-    pub(crate) fn language(&self) -> Option<SupportedLanguage> {
-        self.language.map(|language| language.get_language())
-    }
-
     pub(crate) fn get_project_file_walker_types(&self) -> Types {
-        get_project_file_walker_types(self.language())
+        get_project_file_walker_types(self.language)
     }
 
     pub(crate) fn get_project_file_walker(&self) -> WalkParallel {
