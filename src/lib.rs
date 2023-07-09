@@ -181,41 +181,43 @@ pub fn run(args: Args) {
                 }
                 return;
             }
-            let language = return_if_none!(if matched_languages.len() > 1
-                && args.language().is_none()
-            {
-                let mut successfully_parsed_query_languages =
-                    matched_languages.iter().filter_map(|&matched_language| {
-                        cached_queries
-                            .get_and_cache_query_for_language(&query_source, matched_language)
-                            .map(|_| matched_language)
-                    });
-                let maybe_first_matched_language = successfully_parsed_query_languages.next();
-                match maybe_first_matched_language {
-                    Some(first_matched_language) => {
-                        let second_matched_language = successfully_parsed_query_languages.next();
-                        if let Some(second_matched_language) = second_matched_language {
-                            let mut all_matched_languages =
-                                vec![first_matched_language, second_matched_language];
-                            all_matched_languages.extend(successfully_parsed_query_languages);
-                            error_disambiguate_language_for_file(
-                                &project_file_dir_entry,
-                                &all_matched_languages,
-                            );
-                            return;
+            let language = return_if_none! {
+                if matched_languages.len() > 1
+                    && args.language().is_none()
+                {
+                    let mut successfully_parsed_query_languages =
+                        matched_languages.iter().filter_map(|&matched_language| {
+                            cached_queries
+                                .get_and_cache_query_for_language(&query_source, matched_language)
+                                .map(|_| matched_language)
+                        });
+                    let maybe_first_matched_language = successfully_parsed_query_languages.next();
+                    match maybe_first_matched_language {
+                        Some(first_matched_language) => {
+                            let second_matched_language = successfully_parsed_query_languages.next();
+                            if let Some(second_matched_language) = second_matched_language {
+                                let mut all_matched_languages =
+                                    vec![first_matched_language, second_matched_language];
+                                all_matched_languages.extend(successfully_parsed_query_languages);
+                                error_disambiguate_language_for_file(
+                                    &project_file_dir_entry,
+                                    &all_matched_languages,
+                                );
+                                return;
+                            }
+                            Some(first_matched_language)
                         }
-                        Some(first_matched_language)
+                        None => None,
                     }
-                    None => None,
+                } else {
+                    matched_languages.into_iter().find(|matched_language| {
+                        !matches!(
+                            args.language(),
+                            Some(specified_language) if specified_language != *matched_language
+                        )
+                    })
                 }
-            } else {
-                matched_languages.into_iter().find(|matched_language| {
-                    !matches!(
-                        args.language(),
-                        Some(specified_language) if specified_language != *matched_language
-                    )
-                })
-            });
+            };
             let query = return_if_none!(
                 cached_queries.get_and_cache_query_for_language(&query_source, language)
             );
