@@ -35,7 +35,7 @@ pub struct Args {
     pub capture_name: Option<String>,
 
     #[arg(short, long, value_enum)]
-    pub language: Option<SupportedLanguageName>,
+    language: Option<SupportedLanguageName>,
 
     #[arg(short, long)]
     pub filter: Option<String>,
