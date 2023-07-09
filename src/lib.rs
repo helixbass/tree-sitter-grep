@@ -223,7 +223,7 @@ fn eprint_nothing_searched() {
 
 fn fail(message: &str) -> ! {
     eprintln!("error: {message}");
-    process::exit(2);
+    exit(ExitCode::Error);
 }
 
 fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
