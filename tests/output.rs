@@ -368,7 +368,7 @@ fn test_invalid_query_inline() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-source '(function_itemz) @function_item' --language rust
-            error: couldn't parse query for Rust
+            error: couldn't parse query for Rust: Query error at 1:2. Invalid node type function_itemz
         "#,
     );
 }
@@ -379,7 +379,7 @@ fn test_invalid_query_file() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-file ./function-itemz.scm --language rust
-            error: couldn't parse query for Rust
+            error: couldn't parse query for Rust: Query error at 1:2. Invalid node type function_itemz
         "#,
     );
 }
