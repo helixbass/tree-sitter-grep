@@ -95,21 +95,39 @@ fn parse_command_line(command_line: &str) -> Vec<String> {
         .collect()
 }
 
-fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
+fn assert_sorted_output_with_exit_code(
+    fixture_dir_name: &str,
+    command_and_output: &str,
+    failure_code: Option<i32>,
+) {
     let CommandAndOutput {
         mut command_line_args,
         output,
     } = parse_command_and_output(command_and_output);
     let command_name = command_line_args.remove(0);
-    Command::cargo_bin(command_name)
-        .unwrap()
+    let mut command = Command::cargo_bin(command_name).unwrap();
+    command
         .args(command_line_args)
-        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
-        .assert()
-        .success()
-        .stdout(predicate::function(|actual_output| {
-            do_sorted_lines_match(actual_output, &output)
-        }));
+        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name));
+    let command = if let Some(failure_code) = failure_code {
+        command.assert().failure().code(failure_code)
+    } else {
+        command.assert().success()
+    };
+    command.stdout(predicate::function(|actual_output| {
+        do_sorted_lines_match(actual_output, &output)
+    }));
+}
+
+fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
+    assert_sorted_output_with_exit_code(fixture_dir_name, command_and_output, None);
+}
+
+fn assert_sorted_output_with_no_matches_exit_status(
+    fixture_dir_name: &str,
+    command_and_output: &str,
+) {
+    assert_sorted_output_with_exit_code(fixture_dir_name, command_and_output, Some(1));
 }
 
 fn massage_windows_line(line: &str) -> String {
@@ -154,6 +172,7 @@ fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
         .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
         .assert()
         .failure()
+        .code(2)
         .stderr(predicate::function(|stderr: &str| {
             let stderr = massage_error_output(stderr);
             stderr == output
@@ -180,7 +199,10 @@ fn assert_non_match_output(fixture_dir_name: &str, command_and_output: &str) {
 
 fn massage_error_output(output: &str) -> String {
     if cfg!(windows) {
-        output.replace(".exe", "")
+        output.replace(".exe", "").replace(
+            "The system cannot find the file specified.",
+            "No such file or directory",
+        )
     } else {
         output.to_owned()
     }
@@ -346,7 +368,7 @@ fn test_invalid_query_inline() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-source '(function_itemz) @function_item' --language rust
-            error: invalid query
+            error: couldn't parse query for Rust: Query error at 1:2. Invalid node type function_itemz
         "#,
     );
 }
@@ -357,7 +379,7 @@ fn test_invalid_query_file() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-file ./function-itemz.scm --language rust
-            error: invalid query
+            error: couldn't parse query for Rust: Query error at 1:2. Invalid node type function_itemz
         "#,
     );
 }
@@ -481,7 +503,7 @@ fn test_predicate() {
 
 #[test]
 fn test_no_matches() {
-    assert_sorted_output(
+    assert_sorted_output_with_no_matches_exit_status(
         "rust_project",
         r#"
             $ tree-sitter-grep --query-source '(function_item name: (identifier) @name (#eq? @name "addz")) @function_item' --language rust
@@ -1048,3 +1070,110 @@ fn test_before_and_after_context() {
         "#,
     );
 }
+
+#[test]
+fn test_no_files_searched_directory_path_argument_with_no_recognized_file_types() {
+    assert_failure_output(
+        "no_recognized_file_types",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' subdir/
+            No files were searched
+        "#,
+    );
+}
+
+#[test]
+fn test_no_files_searched_no_recognized_file_types() {
+    assert_failure_output(
+        "no_recognized_file_types",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f'
+            No files were searched
+        "#,
+    );
+}
+
+#[test]
+fn test_no_files_searched_recognized_files_but_dont_match_specified_language() {
+    assert_failure_output(
+        "typescript_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' --language rust
+            No files were searched
+        "#,
+    );
+}
+
+#[test]
+fn test_couldnt_parse_more_than_two_candidate_auto_detected_languages() {
+    assert_failure_output(
+        "mixed_project",
+        r#"
+            $ tree-sitter-grep -q '(function_itemz) @f'
+            error: couldn't parse query for Javascript, Rust, or Typescript
+        "#,
+    );
+}
+
+#[test]
+fn test_couldnt_parse_two_candidate_auto_detected_languages() {
+    assert_failure_output(
+        "mixed_project",
+        r#"
+            $ tree-sitter-grep -q '(function_itemz) @f' javascript_src/ typescript_src/
+            error: couldn't parse query for Javascript or Typescript
+        "#,
+    );
+}
+
+#[test]
+fn test_nonexistent_file_specified() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' src/nonexistent.rs
+            src/nonexistent.rs: No such file or directory (os error 2)
+        "#,
+    );
+}
+
+#[test]
+fn test_nonexistent_directory_specified() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' srcz/
+            srcz/: No such file or directory (os error 2)
+        "#,
+    );
+}
+
+// #[test]
+// fn test_specify_explicit_file_but_dont_match_specified_language() {
+//     assert_failure_output(
+//         "mixed_project",
+//         r#"
+//             $ tree-sitter-grep -q '(function_item) @f' --language rust
+// javascript_src/index.js         "#,
+//     );
+// }
+
+// #[test]
+// fn test_specify_explicit_file_of_unrecognized_file_type() {
+//     assert_failure_output(
+//         "no_recognized_file_types",
+//         r#"
+//             $ tree-sitter-grep -q '(function_item) @f' something.scala
+//         "#,
+//     );
+// }
+
+// #[test]
+// fn test_specify_explicit_file_of_unrecognized_file_type_and_language_flag() {
+//     assert_failure_output(
+//         "no_recognized_file_types",
+//         r#"
+//             $ tree-sitter-grep -q '(function_item) @f' --language rust
+// something.scala         "#,
+//     );
+// }

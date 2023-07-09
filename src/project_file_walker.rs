@@ -8,7 +8,10 @@ use std::{
 use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
 use rayon::{iter::IterBridge, prelude::*};
 
-use crate::language::{get_all_supported_languages, SupportedLanguage};
+use crate::{
+    err_message,
+    language::{get_all_supported_languages, SupportedLanguage},
+};
 
 trait IntoParallelIterator {
     fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator>;
@@ -34,7 +37,10 @@ impl WalkParallelIterator {
                     let sender = sender.clone();
                     move |entry| {
                         let entry = match entry {
-                            Err(_) => return WalkState::Continue,
+                            Err(err) => {
+                                err_message!("{err}");
+                                return WalkState::Continue;
+                            }
                             Ok(entry) => entry,
                         };
                         if !entry.metadata().unwrap().is_file() {
