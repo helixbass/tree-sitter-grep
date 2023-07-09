@@ -167,56 +167,48 @@ pub fn run(args: Args) {
     args.get_project_file_parallel_iterator().for_each(
         |(project_file_dir_entry, matched_languages)| {
             searched.store(true, Ordering::SeqCst);
-            if matched_languages.is_empty() {
-                match args.language() {
-                    Some(language) => {
+            let language = match args.language() {
+                Some(specified_language) => {
+                    if !matched_languages.contains(&specified_language) {
                         error_explicit_path_argument_not_of_specified_type(
                             &project_file_dir_entry,
-                            language,
+                            specified_language,
                         );
+                        return;
                     }
-                    None => {
-                        error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
-                    }
+                    specified_language
                 }
-                return;
-            }
-            let language = return_if_none! {
-                if matched_languages.len() > 1
-                    && args.language().is_none()
-                {
-                    let mut successfully_parsed_query_languages =
-                        matched_languages.iter().filter_map(|&matched_language| {
-                            cached_queries
-                                .get_and_cache_query_for_language(&query_source, matched_language)
-                                .map(|_| matched_language)
-                        });
-                    let maybe_first_matched_language = successfully_parsed_query_languages.next();
-                    match maybe_first_matched_language {
-                        Some(first_matched_language) => {
-                            let second_matched_language = successfully_parsed_query_languages.next();
-                            if let Some(second_matched_language) = second_matched_language {
-                                let mut all_matched_languages =
-                                    vec![first_matched_language, second_matched_language];
-                                all_matched_languages.extend(successfully_parsed_query_languages);
+                None => match matched_languages.len() {
+                    0 => {
+                        error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
+                        return;
+                    }
+                    1 => matched_languages[0],
+                    _ => {
+                        let successfully_parsed_query_languages = matched_languages
+                            .iter()
+                            .filter_map(|&matched_language| {
+                                cached_queries
+                                    .get_and_cache_query_for_language(
+                                        &query_source,
+                                        matched_language,
+                                    )
+                                    .map(|_| matched_language)
+                            })
+                            .collect::<Vec<_>>();
+                        match successfully_parsed_query_languages.len() {
+                            0 => return,
+                            1 => successfully_parsed_query_languages[0],
+                            _ => {
                                 error_disambiguate_language_for_file(
                                     &project_file_dir_entry,
-                                    &all_matched_languages,
+                                    &successfully_parsed_query_languages,
                                 );
                                 return;
                             }
-                            Some(first_matched_language)
                         }
-                        None => None,
                     }
-                } else {
-                    matched_languages.into_iter().find(|matched_language| {
-                        !matches!(
-                            args.language(),
-                            Some(specified_language) if specified_language != *matched_language
-                        )
-                    })
-                }
+                },
             };
             let query = return_if_none!(
                 cached_queries.get_and_cache_query_for_language(&query_source, language)
