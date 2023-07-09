@@ -1,6 +1,7 @@
-use std::{collections::HashMap, ffi::OsStr, path::Path};
+use std::collections::HashMap;
 
 use clap::ValueEnum;
+use once_cell::sync::Lazy;
 use tree_sitter::Language;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum, Hash)]
@@ -11,115 +12,65 @@ pub enum SupportedLanguageName {
 }
 
 impl SupportedLanguageName {
-    pub fn get_language(self) -> Box<dyn SupportedLanguage> {
-        match self {
-            Self::Rust => Box::new(get_rust_language()),
-            Self::Typescript => Box::new(get_typescript_language()),
-            Self::Javascript => Box::new(get_javascript_language()),
-        }
+    pub fn get_language(&self) -> SupportedLanguage {
+        *ALL_SUPPORTED_LANGUAGES_BY_SUPPORTED_LANGUAGE_NAME
+            .get(self)
+            .unwrap()
     }
 }
 
-pub trait SupportedLanguage {
-    fn language(&self) -> Language;
-    fn name(&self) -> SupportedLanguageName;
-    fn name_for_ignore_select(&self) -> &'static str;
-    fn extensions(&self) -> Vec<&'static str>;
+#[derive(Copy, Clone)]
+pub struct SupportedLanguage {
+    pub language: Language,
+    pub name: SupportedLanguageName,
+    pub name_for_ignore_select: &'static str,
 }
 
-pub struct SupportedLanguageRust;
-
-impl SupportedLanguage for SupportedLanguageRust {
-    fn language(&self) -> Language {
-        tree_sitter_rust::language()
-    }
-
-    fn name(&self) -> SupportedLanguageName {
-        SupportedLanguageName::Rust
-    }
-
-    fn name_for_ignore_select(&self) -> &'static str {
-        "rust"
-    }
-
-    fn extensions(&self) -> Vec<&'static str> {
-        vec!["rs"]
+impl PartialEq for SupportedLanguage {
+    fn eq(&self, other: &Self) -> bool {
+        self.language == other.language
     }
 }
 
-pub fn get_rust_language() -> SupportedLanguageRust {
-    SupportedLanguageRust
-}
-
-pub struct SupportedLanguageTypescript;
-
-impl SupportedLanguage for SupportedLanguageTypescript {
-    fn language(&self) -> Language {
-        tree_sitter_typescript::language_tsx()
-    }
-
-    fn name(&self) -> SupportedLanguageName {
-        SupportedLanguageName::Typescript
-    }
-
-    fn name_for_ignore_select(&self) -> &'static str {
-        "ts"
-    }
-
-    fn extensions(&self) -> Vec<&'static str> {
-        vec!["ts", "tsx"]
-    }
-}
-
-pub fn get_typescript_language() -> SupportedLanguageTypescript {
-    SupportedLanguageTypescript
-}
-
-pub struct SupportedLanguageJavascript;
-
-impl SupportedLanguage for SupportedLanguageJavascript {
-    fn language(&self) -> Language {
-        tree_sitter_javascript::language()
-    }
-
-    fn name(&self) -> SupportedLanguageName {
-        SupportedLanguageName::Javascript
-    }
-
-    fn name_for_ignore_select(&self) -> &'static str {
-        "js"
-    }
-
-    fn extensions(&self) -> Vec<&'static str> {
-        vec!["js", "jsx", "vue", "cjs", "mjs"]
-    }
-}
-
-pub fn get_javascript_language() -> SupportedLanguageJavascript {
-    SupportedLanguageJavascript
-}
-
-pub fn get_all_supported_languages() -> HashMap<SupportedLanguageName, Box<dyn SupportedLanguage>> {
-    [
-        (
-            SupportedLanguageName::Rust,
-            Box::new(get_rust_language()) as Box<dyn SupportedLanguage>,
-        ),
-        (
-            SupportedLanguageName::Typescript,
-            Box::new(get_typescript_language()) as Box<dyn SupportedLanguage>,
-        ),
-        (
-            SupportedLanguageName::Javascript,
-            Box::new(get_javascript_language()) as Box<dyn SupportedLanguage>,
-        ),
+pub static ALL_SUPPORTED_LANGUAGES: Lazy<Vec<SupportedLanguage>> = Lazy::new(|| {
+    vec![
+        SupportedLanguage {
+            language: tree_sitter_rust::language(),
+            name: SupportedLanguageName::Rust,
+            name_for_ignore_select: "rust",
+        },
+        SupportedLanguage {
+            language: tree_sitter_typescript::language_tsx(),
+            name: SupportedLanguageName::Typescript,
+            name_for_ignore_select: "ts",
+        },
+        SupportedLanguage {
+            language: tree_sitter_javascript::language(),
+            name: SupportedLanguageName::Javascript,
+            name_for_ignore_select: "js",
+        },
     ]
-    .into()
-}
+});
 
-pub fn maybe_supported_language_from_path(path: &Path) -> Option<Box<dyn SupportedLanguage>> {
-    let extension = path.extension().and_then(OsStr::to_str)?;
-    get_all_supported_languages()
-        .into_values()
-        .find(|language| language.extensions().contains(&extension))
-}
+pub static ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT: Lazy<
+    HashMap<&'static str, SupportedLanguage>,
+> = Lazy::new(|| {
+    ALL_SUPPORTED_LANGUAGES
+        .iter()
+        .map(|supported_language| {
+            (
+                supported_language.name_for_ignore_select,
+                *supported_language,
+            )
+        })
+        .collect()
+});
+
+pub static ALL_SUPPORTED_LANGUAGES_BY_SUPPORTED_LANGUAGE_NAME: Lazy<
+    HashMap<SupportedLanguageName, SupportedLanguage>,
+> = Lazy::new(|| {
+    ALL_SUPPORTED_LANGUAGES
+        .iter()
+        .map(|supported_language| (supported_language.name, *supported_language))
+        .collect()
+});

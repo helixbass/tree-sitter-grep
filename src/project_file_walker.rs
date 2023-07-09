@@ -1,52 +1,75 @@
 use std::{
-    path::PathBuf,
     sync::{mpsc, mpsc::Receiver},
     thread,
     thread::JoinHandle,
 };
 
-use ignore::{types::TypesBuilder, DirEntry, WalkBuilder, WalkParallel, WalkState};
+use ignore::{
+    types::{Types, TypesBuilder},
+    DirEntry, WalkParallel, WalkState,
+};
 use rayon::{iter::IterBridge, prelude::*};
 
 use crate::{
     err_message,
-    language::{get_all_supported_languages, SupportedLanguage},
+    language::{
+        SupportedLanguage, ALL_SUPPORTED_LANGUAGES,
+        ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT,
+    },
 };
 
-trait IntoParallelIterator {
-    fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator>;
-}
-
-impl IntoParallelIterator for WalkParallel {
-    fn into_parallel_iterator(self) -> IterBridge<WalkParallelIterator> {
-        WalkParallelIterator::new(self).par_bridge()
-    }
+pub(crate) fn into_parallel_iterator(
+    walk_parallel: WalkParallel,
+) -> IterBridge<WalkParallelIterator> {
+    WalkParallelIterator::new(walk_parallel).par_bridge()
 }
 
 pub(crate) struct WalkParallelIterator {
-    receiver_iterator: <Receiver<DirEntry> as IntoIterator>::IntoIter,
+    receiver_iterator: <Receiver<(DirEntry, Vec<SupportedLanguage>)> as IntoIterator>::IntoIter,
     _handle: JoinHandle<()>,
 }
 
 impl WalkParallelIterator {
     pub fn new(walk_parallel: WalkParallel) -> Self {
-        let (sender, receiver) = mpsc::channel::<DirEntry>();
+        let (sender, receiver) = mpsc::channel::<(DirEntry, Vec<SupportedLanguage>)>();
         let handle = thread::spawn(move || {
+            let ignore = &walk_parallel.ignore();
             walk_parallel.run(move || {
                 Box::new({
                     let sender = sender.clone();
-                    move |entry| {
-                        let entry = match entry {
+                    move |entry_and_match_metadata| {
+                        let (entry, match_metadata) = match entry_and_match_metadata {
                             Err(err) => {
                                 err_message!("{err}");
                                 return WalkState::Continue;
                             }
-                            Ok(entry) => entry,
+                            Ok(entry_and_match_metadata) => entry_and_match_metadata,
                         };
                         if !entry.metadata().unwrap().is_file() {
                             return WalkState::Continue;
                         }
-                        sender.send(entry).unwrap();
+                        let matched_languages = match_metadata
+                            .or_else(|| {
+                                ignore
+                                    .should_skip_entry_with_match_metadata_token(&entry)
+                                    .1
+                                    .map(|match_metadata_token| {
+                                        ignore.get_match_metadata(match_metadata_token)
+                                    })
+                            })
+                            .map(|match_metadata| {
+                                match_metadata
+                                    .matching_file_types
+                                    .map(|file_type_def| {
+                                        ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT
+                                            .get(&file_type_def.name())
+                                            .copied()
+                                            .unwrap()
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .unwrap_or_default();
+                        sender.send((entry, matched_languages)).unwrap();
                         WalkState::Continue
                     }
                 })
@@ -60,38 +83,22 @@ impl WalkParallelIterator {
 }
 
 impl Iterator for WalkParallelIterator {
-    type Item = DirEntry;
+    type Item = (DirEntry, Vec<SupportedLanguage>);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.receiver_iterator.next()
     }
 }
 
-fn get_project_file_walker(
-    language: Option<&dyn SupportedLanguage>,
-    paths: &[PathBuf],
-) -> WalkParallel {
-    assert!(!paths.is_empty());
-    let mut builder = WalkBuilder::new(&paths[0]);
+pub(crate) fn get_project_file_walker_types(language: Option<SupportedLanguage>) -> Types {
     let mut types_builder = TypesBuilder::new();
     types_builder.add_defaults();
     if let Some(language) = language {
-        types_builder.select(language.name_for_ignore_select());
+        types_builder.select(language.name_for_ignore_select);
     } else {
-        for language in get_all_supported_languages().values() {
-            types_builder.select(language.name_for_ignore_select());
+        for language in ALL_SUPPORTED_LANGUAGES.iter() {
+            types_builder.select(language.name_for_ignore_select);
         }
     }
-    builder.types(types_builder.build().unwrap());
-    for path in &paths[1..] {
-        builder.add(path);
-    }
-    builder.build_parallel()
-}
-
-pub(crate) fn get_project_file_parallel_iterator(
-    language: Option<&dyn SupportedLanguage>,
-    paths: &[PathBuf],
-) -> IterBridge<WalkParallelIterator> {
-    get_project_file_walker(language, paths).into_parallel_iterator()
+    types_builder.build().unwrap()
 }
