@@ -100,7 +100,7 @@ impl CachedQueries {
     }
 
     fn error_if_no_successful_query_parsing(&self) {
-        if !self.0.iter().any(|query| {
+        if !self.0.values().any(|query| {
             query
                 .get()
                 .and_then(|result| result.as_ref().ok())
@@ -109,9 +109,7 @@ impl CachedQueries {
             let attempted_parsings = self
                 .0
                 .iter()
-                .enumerate()
                 .filter(|(_, value)| value.get().is_some())
-                .map(|(index, value)| -> (SupportedLanguage, _) { (index.into(), value) })
                 .collect::<Vec<_>>();
             assert!(
                 !attempted_parsings.is_empty(),

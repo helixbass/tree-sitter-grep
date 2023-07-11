@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Index};
+use std::{
+    collections::HashMap,
+    ops::{Deref, Index},
+};
 
 use clap::ValueEnum;
 use once_cell::sync::Lazy;
@@ -40,13 +43,99 @@ impl SupportedLanguage {
     }
 }
 
-pub type BySupportedLanguage<T> = [T; 22];
+#[derive(Default)]
+pub struct BySupportedLanguage<T>([T; 22]);
+
+impl<T> BySupportedLanguage<T> {
+    pub fn iter(&self) -> BySupportedLanguageIter<'_, T> {
+        BySupportedLanguageIter::new(self)
+    }
+
+    pub fn values(&self) -> BySupportedLanguageValues<'_, T> {
+        BySupportedLanguageValues::new(self)
+    }
+}
+
+pub struct BySupportedLanguageIter<'collection, T> {
+    collection: &'collection BySupportedLanguage<T>,
+    next_index: usize,
+}
+
+impl<'collection, T> BySupportedLanguageIter<'collection, T> {
+    pub fn new(collection: &'collection BySupportedLanguage<T>) -> Self {
+        Self {
+            collection,
+            next_index: 0,
+        }
+    }
+}
+
+impl<'collection, T> Iterator for BySupportedLanguageIter<'collection, T> {
+    type Item = (SupportedLanguage, &'collection T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_index < self.collection.len() {
+            let ret = Some((
+                ALL_SUPPORTED_LANGUAGES[self.next_index],
+                &self.collection.0[self.next_index],
+            ));
+            self.next_index += 1;
+            ret
+        } else {
+            None
+        }
+    }
+}
+
+pub struct BySupportedLanguageValues<'collection, T> {
+    collection: &'collection BySupportedLanguage<T>,
+    next_index: usize,
+}
+
+impl<'collection, T> BySupportedLanguageValues<'collection, T> {
+    pub fn new(collection: &'collection BySupportedLanguage<T>) -> Self {
+        Self {
+            collection,
+            next_index: 0,
+        }
+    }
+}
+
+impl<'collection, T> Iterator for BySupportedLanguageValues<'collection, T> {
+    type Item = &'collection T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_index < self.collection.len() {
+            let ret = Some(&self.collection.0[self.next_index]);
+            self.next_index += 1;
+            ret
+        } else {
+            None
+        }
+    }
+}
 
 impl<T> Index<SupportedLanguage> for BySupportedLanguage<T> {
     type Output = T;
 
     fn index(&self, index: SupportedLanguage) -> &Self::Output {
-        &self[index as usize]
+        &self.0[index as usize]
+    }
+}
+
+impl<T> Index<usize> for BySupportedLanguage<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
+    }
+}
+
+impl<T> Deref for BySupportedLanguage<T> {
+    type Target = [T; 22];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -82,7 +171,7 @@ impl From<usize> for SupportedLanguage {
 
 pub static ALL_SUPPORTED_LANGUAGES: BySupportedLanguage<SupportedLanguage> = {
     use SupportedLanguage::*;
-    [
+    BySupportedLanguage([
         Rust,
         Typescript,
         Javascript,
@@ -105,11 +194,11 @@ pub static ALL_SUPPORTED_LANGUAGES: BySupportedLanguage<SupportedLanguage> = {
         Json,
         Css,
         Lua,
-    ]
+    ])
 };
 
 static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<Language>> = Lazy::new(|| {
-    [
+    BySupportedLanguage([
         tree_sitter_rust::language(),
         tree_sitter_typescript::language_tsx(),
         tree_sitter_javascript::language(),
@@ -132,39 +221,40 @@ static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<Language>> = Lazy:
         tree_sitter_json::language(),
         tree_sitter_css::language(),
         tree_sitter_lua::language(),
-    ]
+    ])
 });
 
-pub static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'static str> = [
-    "rust",
-    "ts",
-    "js",
-    "swift",
-    "objc",
-    "toml",
-    "py",
-    "ruby",
-    "c",
-    "cpp",
-    "go",
-    "java",
-    "csharp",
-    "kotlin",
-    "elisp",
-    "elm",
-    "docker",
-    "html",
-    "treesitterquery",
-    "json",
-    "css",
-    "lua",
-];
+pub static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'static str> =
+    BySupportedLanguage([
+        "rust",
+        "ts",
+        "js",
+        "swift",
+        "objc",
+        "toml",
+        "py",
+        "ruby",
+        "c",
+        "cpp",
+        "go",
+        "java",
+        "csharp",
+        "kotlin",
+        "elisp",
+        "elm",
+        "docker",
+        "html",
+        "treesitterquery",
+        "json",
+        "css",
+        "lua",
+    ]);
 
 pub static ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT: Lazy<
     HashMap<&'static str, SupportedLanguage>,
 > = Lazy::new(|| {
     ALL_SUPPORTED_LANGUAGES
-        .iter()
+        .values()
         .map(|supported_language| {
             (
                 supported_language.name_for_ignore_select(),

@@ -96,7 +96,7 @@ pub(crate) fn get_project_file_walker_types(language: Option<SupportedLanguage>)
     if let Some(language) = language {
         types_builder.select(language.name_for_ignore_select());
     } else {
-        for language in ALL_SUPPORTED_LANGUAGES.iter() {
+        for language in ALL_SUPPORTED_LANGUAGES.values() {
             types_builder.select(language.name_for_ignore_select());
         }
     }
