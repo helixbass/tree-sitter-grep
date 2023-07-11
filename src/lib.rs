@@ -35,7 +35,7 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
-use language::{get_supported_language_language, BySupportedLanguage, SupportedLanguage};
+use language::{BySupportedLanguage, SupportedLanguage};
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
@@ -93,10 +93,7 @@ impl CachedQueries {
         language: SupportedLanguage,
     ) -> Option<Arc<Query>> {
         self.0[language]
-            .get_or_init(|| {
-                maybe_get_query(query_source, get_supported_language_language(language))
-                    .map(Arc::new)
-            })
+            .get_or_init(|| maybe_get_query(query_source, language.language()).map(Arc::new))
             .as_ref()
             .ok()
             .cloned()
@@ -214,7 +211,7 @@ pub fn run(args: Args) {
             let query_context = QueryContext::new(
                 query,
                 capture_index,
-                get_supported_language_language(language),
+                language.language(),
                 args.filter.clone(),
                 args.filter_arg.clone(),
             );

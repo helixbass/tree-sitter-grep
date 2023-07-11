@@ -30,6 +30,16 @@ pub enum SupportedLanguage {
     Lua,
 }
 
+impl SupportedLanguage {
+    pub fn language(&self) -> Language {
+        SUPPORTED_LANGUAGE_LANGUAGES[*self]
+    }
+
+    pub fn name_for_ignore_select(&self) -> &'static str {
+        SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT[*self]
+    }
+}
+
 pub type BySupportedLanguage<T> = [T; 22];
 
 impl<T> Index<SupportedLanguage> for BySupportedLanguage<T> {
@@ -125,11 +135,6 @@ static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<Language>> = Lazy:
     ]
 });
 
-#[inline(always)]
-pub fn get_supported_language_language(supported_language: SupportedLanguage) -> Language {
-    SUPPORTED_LANGUAGE_LANGUAGES[supported_language]
-}
-
 pub static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'static str> = [
     "rust",
     "ts",
@@ -155,13 +160,6 @@ pub static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'sta
     "lua",
 ];
 
-#[inline(always)]
-pub fn get_supported_language_name_for_ignore_select(
-    supported_language: SupportedLanguage,
-) -> &'static str {
-    SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT[supported_language]
-}
-
 pub static ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT: Lazy<
     HashMap<&'static str, SupportedLanguage>,
 > = Lazy::new(|| {
@@ -169,7 +167,7 @@ pub static ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT: Lazy<
         .iter()
         .map(|supported_language| {
             (
-                get_supported_language_name_for_ignore_select(*supported_language),
+                supported_language.name_for_ignore_select(),
                 *supported_language,
             )
         })
