@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use inflector::Inflector;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
+    bracketed,
     parse::{Parse, ParseStream},
     parse_macro_input, Expr, ExprArray, Ident, Token,
 };
@@ -13,8 +16,13 @@ fn expr_to_ident(expr: Expr) -> Ident {
     }
 }
 
-fn get_variants(expr_array: ExprArray) -> Vec<Ident> {
-    expr_array.elems.into_iter().map(expr_to_ident).collect()
+fn parse_idents_array(input: ParseStream) -> syn::Result<Vec<Ident>> {
+    Ok(input
+        .parse::<ExprArray>()?
+        .elems
+        .into_iter()
+        .map(expr_to_ident)
+        .collect())
 }
 
 struct FixedMapArgs {
@@ -34,7 +42,7 @@ impl Parse for FixedMapArgs {
                     name = Some(input.parse::<Ident>()?);
                 }
                 "variants" => {
-                    variants = Some(get_variants(input.parse::<ExprArray>()?));
+                    variants = Some(parse_idents_array(input)?);
                 }
                 _ => panic!("didn't expect key {}", key),
             }
@@ -71,6 +79,8 @@ pub fn fixed_map(input: TokenStream) -> TokenStream {
         &variants,
         &all_variants_collection_name,
     );
+    let collection_generator_macro_definition =
+        get_collection_generator_macro_definition(&collection_type_name, &variants);
 
     quote! {
         #token_enum_definition
@@ -86,6 +96,8 @@ pub fn fixed_map(input: TokenStream) -> TokenStream {
         #from_usize_implementation
 
         #all_variants_collection_definition
+
+        #collection_generator_macro_definition
     }
     .into()
 }
@@ -256,4 +268,83 @@ fn get_all_variants_collection_definition(
             ])
         };
     }
+}
+
+fn get_collection_generator_macro_definition(
+    collection_type_name: &Ident,
+    variants: &[Ident],
+) -> proc_macro2::TokenStream {
+    let macro_name = format_ident!("{}", collection_type_name.to_string().to_snake_case());
+    quote! {
+        #[macro_export]
+        macro_rules! #macro_name {
+            ($($variant:ident => $value:expr),* $(,)?) => {
+                proc_macros::by_fixed_map!(
+                    [$($variant => $value),*],
+                    [
+                        #(#variants),*
+                    ],
+                    #collection_type_name
+                )
+            }
+        }
+    }
+}
+
+struct ByFixedMapArgs {
+    value_mapping: HashMap<Ident, Expr>,
+    variants: Vec<Ident>,
+    collection_type_name: Ident,
+}
+
+impl Parse for ByFixedMapArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let value_mapping_content;
+        bracketed!(value_mapping_content in input);
+        let mut value_mapping: HashMap<Ident, Expr> = Default::default();
+        while !value_mapping_content.is_empty() {
+            let key: Ident = value_mapping_content.parse()?;
+            value_mapping_content.parse::<Token![=>]>()?;
+            let value: Expr = value_mapping_content.parse()?;
+            value_mapping.insert(key, value);
+            if value_mapping_content.is_empty() {
+                break;
+            }
+            value_mapping_content.parse::<Token![,]>()?;
+        }
+        input.parse::<Token![,]>()?;
+        let variants = parse_idents_array(input)?;
+        input.parse::<Token![,]>()?;
+        let collection_type_name: Ident = input.parse()?;
+        Ok(Self {
+            value_mapping,
+            variants,
+            collection_type_name,
+        })
+    }
+}
+
+#[proc_macro]
+pub fn by_fixed_map(input: TokenStream) -> TokenStream {
+    let ByFixedMapArgs {
+        value_mapping,
+        variants,
+        collection_type_name,
+    } = parse_macro_input!(input as ByFixedMapArgs);
+
+    if value_mapping.len() != variants.len() {
+        panic!("Incorrect variants");
+    }
+
+    let ordered_values = variants
+        .iter()
+        .map(|variant| value_mapping.get(variant).expect("Incorrect variants"))
+        .collect::<Vec<_>>();
+
+    quote! {
+        #collection_type_name([
+            #(#ordered_values),*
+        ])
+    }
+    .into()
 }
