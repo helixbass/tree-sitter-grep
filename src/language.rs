@@ -72,7 +72,7 @@ static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<Language>> = Lazy:
     )
 });
 
-pub static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'static str> = by_supported_language!(
+static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'static str> = by_supported_language!(
     Rust => "rust",
     Typescript => "ts",
     Javascript => "js",
