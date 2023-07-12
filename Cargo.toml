@@ -24,7 +24,7 @@ rust-version = "1.70"
 [dependencies]
 bstr = "1.1.0"
 bytecount = "0.6"
-clap = { version = "4.3.0", features = ["derive"] }
+clap = { version = "4.3.0", features = ["derive", "wrap_help"] }
 encoding_rs = "0.8.14"
 encoding_rs_io = "0.1.6"
 ignore = { git = "https://github.com/helixbass/ripgrep", rev = "012f2f1" }

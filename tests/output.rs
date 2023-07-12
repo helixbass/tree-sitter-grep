@@ -176,9 +176,9 @@ fn test_no_query_or_filter_specified() {
         r#"
             $ tree-sitter-grep --language rust
             error: the following required arguments were not provided:
-              <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>>
+              <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>>
 
-            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>> [PATHS]...
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
@@ -317,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query-text'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching>
 
             For more information, try '--help'.
         "#,
@@ -406,7 +406,7 @@ fn test_query_inline_and_query_file_path() {
             $ tree-sitter-grep --query-text '(function_item) @function_item' --query-file ./function-item.scm --language rust
             error: the argument '--query-text <QUERY_TEXT>' cannot be used with '--query-file <PATH_TO_QUERY_FILE>'
 
-            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>> [PATHS]...
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
@@ -419,36 +419,74 @@ fn test_help_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep --help
-            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>> [PATHS]...
+            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             Arguments:
               [PATHS]...
 
+
             Options:
               -Q, --query-file <PATH_TO_QUERY_FILE>
+                      The path to a tree-sitter query file.
+
+                      This conflicts with the --query-text option.
 
               -q, --query-text <QUERY_TEXT>
+                      The source text of a tree-sitter query.
+
+                      This conflicts with the --query-file option.
 
               -c, --capture <CAPTURE_NAME>
+                      The name of the tree-sitter query capture (without leading "@") whose matching nodes will
+                      be output.
+
+                      By default this is the "first" capture encountered in the query source text.
 
               -l, --language <LANGUAGE>
-                      [possible values: c, c++, c-sharp, css, dockerfile, elisp, elm, go, html, java, javascript, json, kotlin, lua, objective-c, python, ruby, rust, swift, toml, tree-sitter-query, typescript]
-              -f, --filter <FILTER>
+                      The target language for matching.
+
+                      By default all files corresponding to supported languages will be searched if the provided
+                      query can be successfully parsed for that language.
+
+                      [possible values: c, c++, c-sharp, css, dockerfile, elisp, elm, go, html, java,
+                      javascript, json, kotlin, lua, objective-c, python, ruby, rust, swift, toml,
+                      tree-sitter-query, typescript]
+
+              -f, --filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>
+                      The path to a dynamic library that can be used as a "filter plugin".
+
+                      Filter plugins allow for more fine-grained filtering of potentially matching tree-sitter
+                      AST nodes.
 
               -a, --filter-arg <FILTER_ARG>
+                      An arbitrary argument to be passed to the specified filter plugin.
+
+                      It is up to the specific filter plugin whether it requires an argument to be passed (eg
+                      for self-configuration) and if so what format it expects that argument to be in.
 
                   --vimgrep
+                      Show results with every match on its own line, including line numbers and column numbers.
+
+                      With this option, a line with more that one match will be printed more than once.
 
               -A, --after-context <NUM>
+                      Show NUM lines after each match
 
               -B, --before-context <NUM>
+                      Show NUM lines before each match
 
               -C, --context <NUM>
+                      Show NUM lines before and after each match.
+
+                      This is equivalent to providing both the -B/--before-context and -A/--after-context flags
+                      with the same value.
 
               -o, --only-matching
+                      Print only the matched (non-empty) parts of a matching line, with each such part on a
+                      separate output line
 
               -h, --help
-                      Print help
+                      Print help (see a summary with '-h')
         "#,
     );
 }
@@ -460,9 +498,9 @@ fn test_no_arguments() {
         r#"
             $ tree-sitter-grep
             error: the following required arguments were not provided:
-              <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>>
+              <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>>
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>> [PATHS]...
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
@@ -478,9 +516,9 @@ fn test_filter_argument_no_filter() {
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' --language rust --filter-arg 2
             error: the following required arguments were not provided:
-              --filter <FILTER>
+              --filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>
 
-            Usage: tree-sitter-grep --language <LANGUAGE> --filter-arg <FILTER_ARG> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <FILTER>> [PATHS]...
+            Usage: tree-sitter-grep --language <LANGUAGE> --filter-arg <FILTER_ARG> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
