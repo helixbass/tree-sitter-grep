@@ -13,6 +13,7 @@ Dual-licensed under MIT or the [UNLICENSE](https://unlicense.org).
 * [Usage](#usage)
 * [Performance](#performance)
 * [Editor integrations](#editor-integrations)
+* [Non-goals](#non-goals)
 * [Contributing/issues](#contributingissues)
 
 
