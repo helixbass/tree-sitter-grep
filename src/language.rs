@@ -11,6 +11,7 @@ fixed_map! {
     name => SupportedLanguage,
     variants => [
         C,
+        #[value(name = "c++")]
         Cpp,
         CSharp,
         Css,

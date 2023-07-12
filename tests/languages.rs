@@ -156,7 +156,7 @@ fn test_cpp() {
     assert_sorted_output(
         "cpp_project",
         r#"
-            $ tree-sitter-grep -q '(namespace_identifier) @c' --language cpp
+            $ tree-sitter-grep -q '(namespace_identifier) @c' --language c++
             example.cpp:1:const AvailableAttr *DeclAttributes::getUnavailable(
         "#,
     );
