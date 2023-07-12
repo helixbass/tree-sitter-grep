@@ -1,8 +1,22 @@
 [package]
 name = "tree-sitter-grep"
-version = "0.1.0"
+version = "0.1.0-dev.0"
 edition = "2021"
 license = "Unlicense OR MIT"
+authors = [
+  "Julian Rosse <julian@helixbass.net>",
+  "Peter Stuart <peter@peterstuart.org>"
+]
+description = """
+tree-sitter-grep is a grep-like search tool that
+recursively searches the current directory for a
+tree-sitter query pattern. Like ripgrep, it respects
+gitignore rules.
+"""
+homepage = "https://github.com/helixbass/tree-sitter-grep"
+repository = "https://github.com/helixbass/tree-sitter-grep"
+keywords = ["tree-sitter", "grep", "search"]
+categories = ["command-line-utilities", "development-tools"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -47,9 +61,6 @@ tree-sitter-rust = { git = "https://github.com/helixbass/tree-sitter-rust", rev 
 tree-sitter-swift = "0.3.6"
 tree-sitter-toml = "0.20.0"
 tree-sitter-typescript = "0.20.2"
-
-[lib]
-name = "tree_sitter_grep"
 
 [[bin]]
 name = "tree-sitter-grep"
