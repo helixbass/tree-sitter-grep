@@ -65,7 +65,7 @@ So your query must always include at least one capture
 
 If your query includes multiple captures (eg if you are using a "pre-composed" query or are using a
 [predicate](#supported-query-predicates)), tree-sitter-grep will by default use the first capture in
-the query (in lexicographical order) (I think?) as its "target capture"
+the query (in lexicographical order, I think?) as its "target capture"
 
 To override that behavior, you can pass the `-c`/`--capture` argument:
 ```
