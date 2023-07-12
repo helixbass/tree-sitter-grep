@@ -30,12 +30,12 @@ $ cargo install tree-sitter-grep
 
 ```
 $ tree-sitter-grep -q '(trait_bounds) @t'
-core.rs:14:pub struct Core<'s, M: 's, S> {
-core.rs:30:impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
-mod.rs:622:        P: AsRef<Path>,
-mod.rs:623:        M: Matcher,
-mod.rs:624:        S: Sink,
-mod.rs:644:        M: Matcher,
+src/core.rs:14:pub struct Core<'s, M: 's, S> {
+src/core.rs:30:impl<'s, M: Matcher, S: Sink> Core<'s, M, S> {
+src/mod.rs:622:        P: AsRef<Path>,
+src/mod.rs:623:        M: Matcher,
+src/mod.rs:624:        S: Sink,
+src/mod.rs:644:        M: Matcher,
 [...]
 ```
 
@@ -105,13 +105,13 @@ Specifically that includes:
 - `#eq?`
 ```
 $ tree-sitter-grep -q '((field_declaration name: (field_identifier) @field_name (#eq? @field_name "pos")) @f)' --capture f
-core.rs:20:    pos: usize,
+src/core.rs:20:    pos: usize,
 ```
 - `#match?`
 ```
 $ tree-sitter-grep -q '((field_declaration name: (field_identifier) @field_name (#match? @field_name "^p")) @f)' --capture f
-core.rs:20:    pos: usize,
-mod.rs:157:    passthru: bool,
+src/core.rs:20:    pos: usize,
+src/mod.rs:157:    passthru: bool,
 ```
 
 
