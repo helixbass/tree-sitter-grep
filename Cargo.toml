@@ -17,6 +17,7 @@ homepage = "https://github.com/helixbass/tree-sitter-grep"
 repository = "https://github.com/helixbass/tree-sitter-grep"
 keywords = ["tree-sitter", "grep", "search"]
 categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.70"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
