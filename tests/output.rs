@@ -492,6 +492,50 @@ fn test_help_option() {
 }
 
 #[test]
+fn test_help_short_option() {
+    assert_non_match_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -h
+            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+
+            Arguments:
+              [PATHS]...
+
+            Options:
+              -Q, --query-file <PATH_TO_QUERY_FILE>
+                      The path to a tree-sitter query file
+              -q, --query-text <QUERY_TEXT>
+                      The source text of a tree-sitter query
+              -c, --capture <CAPTURE_NAME>
+                      The name of the tree-sitter query capture (without leading "@") whose matching nodes will
+                      be output
+              -l, --language <LANGUAGE>
+                      The target language for matching [possible values: c, c++, c-sharp, css, dockerfile,
+                      elisp, elm, go, html, java, javascript, json, kotlin, lua, objective-c, python, ruby,
+                      rust, swift, toml, tree-sitter-query, typescript]
+              -f, --filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>
+                      The path to a dynamic library that can be used as a "filter plugin"
+              -a, --filter-arg <FILTER_ARG>
+                      An arbitrary argument to be passed to the specified filter plugin
+                  --vimgrep
+                      Show results with every match on its own line, including line numbers and column numbers
+              -A, --after-context <NUM>
+                      Show NUM lines after each match
+              -B, --before-context <NUM>
+                      Show NUM lines before each match
+              -C, --context <NUM>
+                      Show NUM lines before and after each match
+              -o, --only-matching
+                      Print only the matched (non-empty) parts of a matching line, with each such part on a
+                      separate output line
+              -h, --help
+                      Print help (see more with '--help')
+        "#,
+    );
+}
+
+#[test]
 fn test_no_arguments() {
     assert_failure_output(
         "rust_project",
