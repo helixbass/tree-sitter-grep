@@ -1,224 +1,9 @@
-#![allow(clippy::into_iter_on_ref, clippy::collapsible_if)]
-use std::{borrow::Cow, env, path::PathBuf, process::Command};
+mod shared;
 
-use assert_cmd::prelude::*;
-use predicates::prelude::*;
-use regex::Captures;
-
-#[macro_export]
-macro_rules! regex {
-    ($re:literal $(,)?) => {{
-        static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
-        RE.get_or_init(|| regex::Regex::new($re).unwrap())
-    }};
-}
-
-fn get_fixture_dir_path_from_name(fixture_dir_name: &str) -> PathBuf {
-    // per https://andrewra.dev/2019/03/01/testing-in-rust-temporary-files/
-    let root_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let mut path: PathBuf = root_dir.into();
-    path.push("tests/fixtures");
-    path.push(fixture_dir_name);
-    path
-}
-
-fn parse_command_and_output(command_and_output: &str) -> CommandAndOutput {
-    let mut lines = command_and_output.split('\n').collect::<Vec<_>>();
-    if lines.is_empty() {
-        panic!("Expected at least a command line");
-    }
-    if lines[0].trim().is_empty() {
-        lines.remove(0);
-    }
-    let command_line = lines.remove(0);
-    let indent = regex!(r#"^\s*"#).find(command_line).unwrap().as_str();
-    let command_line_args = parse_command_line(strip_indent(command_line, indent));
-    if !lines.is_empty() {
-        if lines[lines.len() - 1].trim().is_empty() {
-            lines.pop();
-        }
-    }
-    let output: String = lines
-        .into_iter()
-        .map(|line| {
-            if line.is_empty() {
-                "\n".to_owned()
-            } else {
-                assert!(line.starts_with(indent));
-                format!("{}\n", strip_indent(line, indent))
-            }
-        })
-        .collect();
-    CommandAndOutput {
-        command_line_args,
-        output,
-    }
-}
-
-struct CommandAndOutput {
-    command_line_args: Vec<String>,
-    output: String,
-}
-
-fn strip_indent<'line>(line: &'line str, indent: &str) -> &'line str {
-    &line[indent.len()..]
-}
-
-const DYNAMIC_LIBRARY_EXTENSION: &str = if cfg!(target_os = "macos") {
-    ".dylib"
-} else if cfg!(windows) {
-    ".dll"
-} else {
-    ".so"
+use shared::{
+    assert_failure_output, assert_non_match_output, assert_sorted_output,
+    assert_sorted_output_with_no_matches_exit_status, build_example,
 };
-
-fn get_dynamic_library_name(library_name: &str) -> String {
-    if cfg!(windows) {
-        format!("{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
-    } else {
-        format!("lib{library_name}{}", DYNAMIC_LIBRARY_EXTENSION)
-    }
-}
-
-fn parse_command_line(command_line: &str) -> Vec<String> {
-    assert!(command_line.starts_with('$'));
-    shlex::split(&command_line[1..])
-        .unwrap()
-        .iter()
-        .map(|arg| {
-            regex!(r#"lib(\S+)\.so$"#)
-                .replace(arg, |captures: &Captures| {
-                    get_dynamic_library_name(&captures[1])
-                })
-                .into_owned()
-        })
-        .collect()
-}
-
-fn assert_sorted_output_with_exit_code(
-    fixture_dir_name: &str,
-    command_and_output: &str,
-    failure_code: Option<i32>,
-) {
-    let CommandAndOutput {
-        mut command_line_args,
-        output,
-    } = parse_command_and_output(command_and_output);
-    let command_name = command_line_args.remove(0);
-    let mut command = Command::cargo_bin(command_name).unwrap();
-    command
-        .args(command_line_args)
-        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name));
-    let command = if let Some(failure_code) = failure_code {
-        command.assert().failure().code(failure_code)
-    } else {
-        command.assert().success()
-    };
-    command.stdout(predicate::function(|actual_output| {
-        do_sorted_lines_match(actual_output, &output)
-    }));
-}
-
-fn assert_sorted_output(fixture_dir_name: &str, command_and_output: &str) {
-    assert_sorted_output_with_exit_code(fixture_dir_name, command_and_output, None);
-}
-
-fn assert_sorted_output_with_no_matches_exit_status(
-    fixture_dir_name: &str,
-    command_and_output: &str,
-) {
-    assert_sorted_output_with_exit_code(fixture_dir_name, command_and_output, Some(1));
-}
-
-fn massage_windows_line(line: &str) -> String {
-    if cfg!(windows) {
-        let line = strip_trailing_carriage_return(line);
-        let line = normalize_match_path(&line);
-        line.into_owned()
-    } else {
-        line.to_owned()
-    }
-}
-
-fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
-    regex!(r#"\r$"#).replace(line, "")
-}
-
-fn normalize_match_path(line: &str) -> Cow<'_, str> {
-    regex!(r#"^[^:]+[:-]\d+[:-]"#)
-        .replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
-}
-
-fn do_sorted_lines_match(actual_output: &str, expected_output: &str) -> bool {
-    let mut actual_lines = actual_output
-        .split('\n')
-        .map(massage_windows_line)
-        .collect::<Vec<_>>();
-    actual_lines.sort();
-    let mut expected_lines = expected_output.split('\n').collect::<Vec<_>>();
-    expected_lines.sort();
-    actual_lines == expected_lines
-}
-
-fn assert_failure_output(fixture_dir_name: &str, command_and_output: &str) {
-    let CommandAndOutput {
-        mut command_line_args,
-        output,
-    } = parse_command_and_output(command_and_output);
-    let command_name = command_line_args.remove(0);
-    Command::cargo_bin(command_name)
-        .unwrap()
-        .args(command_line_args)
-        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
-        .assert()
-        .failure()
-        .code(2)
-        .stderr(predicate::function(|stderr: &str| {
-            let stderr = massage_error_output(stderr);
-            stderr == output
-        }));
-}
-
-fn assert_non_match_output(fixture_dir_name: &str, command_and_output: &str) {
-    let CommandAndOutput {
-        mut command_line_args,
-        output,
-    } = parse_command_and_output(command_and_output);
-    let command_name = command_line_args.remove(0);
-    Command::cargo_bin(command_name)
-        .unwrap()
-        .args(command_line_args)
-        .current_dir(get_fixture_dir_path_from_name(fixture_dir_name))
-        .assert()
-        .success()
-        .stdout(predicate::function(|stdout: &str| {
-            let stdout = massage_error_output(stdout);
-            stdout == output
-        }));
-}
-
-fn massage_error_output(output: &str) -> String {
-    if cfg!(windows) {
-        output.replace(".exe", "").replace(
-            "The system cannot find the file specified.",
-            "No such file or directory",
-        )
-    } else {
-        output.to_owned()
-    }
-    .split('\n')
-    .map(|line| line.trim_end())
-    .collect::<Vec<_>>()
-    .join("\n")
-}
-
-fn build_example(example_name: &str) {
-    // CargoBuild::new().example(example_name).exec().unwrap();
-    Command::new("cargo")
-        .args(["build", "--example", example_name])
-        .status()
-        .expect("Build example command failed");
-}
 
 #[test]
 fn test_query_inline() {
@@ -532,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query-source'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--filter <FILTER>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-source <QUERY_SOURCE>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <FILTER>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching>
 
             For more information, try '--help'.
         "#,
@@ -659,6 +444,8 @@ fn test_help_option() {
               -B, --before-context <NUM>
 
               -C, --context <NUM>
+
+              -o, --only-matching
 
               -h, --help
                       Print help
@@ -1193,438 +980,54 @@ fn test_specify_explicit_file_of_unrecognized_file_type_and_language_flag() {
 }
 
 #[test]
-fn test_swift() {
-    assert_sorted_output(
-        "swift_project",
-        r#"
-            $ tree-sitter-grep -q '(value_argument) @c' --language swift
-            example.swift:2:    atPath: "native"
-        "#,
-    );
-}
-
-#[test]
-fn test_swift_auto_language() {
-    assert_sorted_output(
-        "swift_project",
-        r#"
-            $ tree-sitter-grep -q '(value_argument) @c'
-            example.swift:2:    atPath: "native"
-        "#,
-    );
-}
-
-#[test]
-fn test_objective_c() {
-    assert_sorted_output(
-        "objective_c_project",
-        r#"
-            $ tree-sitter-grep -q '(struct_declaration) @c' --language objective-c
-            example.h:4:@property (nonatomic, strong, nullable) NSString *baseURL;
-        "#,
-    );
-}
-
-#[test]
-fn test_objective_c_auto_language() {
-    assert_sorted_output(
-        "objective_c_project",
-        r#"
-            $ tree-sitter-grep -q '(struct_declaration) @c'
-            example.h:4:@property (nonatomic, strong, nullable) NSString *baseURL;
-        "#,
-    );
-}
-
-#[test]
-fn test_objective_c_auto_language_ambiguous_query() {
-    assert_failure_output(
-        "objective_c_project",
-        r#"
-            $ tree-sitter-grep -q '(identifier) @c'
-            File "./example.h" has ambiguous file-type, could be ObjectiveC, C, or Cpp. Try passing the --language flag
-        "#,
-    );
-}
-
-#[test]
-fn test_toml() {
+fn test_only_matching() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep -q '(string) @c' --language toml
-            Cargo.toml:2:name = "rust_project"
-            Cargo.toml:3:version = "0.1.0"
-            Cargo.toml:4:edition = "2021"
+            $ tree-sitter-grep --query-source '(parameter) @c' --language rust --only-matching
+            src/lib.rs:3:left: usize
+            src/lib.rs:3:right: usize
         "#,
     );
 }
 
 #[test]
-fn test_toml_auto_language() {
+fn test_only_matching_short_option() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep -q '(string) @c'
-            Cargo.toml:2:name = "rust_project"
-            Cargo.toml:3:version = "0.1.0"
-            Cargo.toml:4:edition = "2021"
+            $ tree-sitter-grep --query-source '(parameter) @c' --language rust -o
+            src/lib.rs:3:left: usize
+            src/lib.rs:3:right: usize
         "#,
     );
 }
 
 #[test]
-fn test_python() {
+fn test_only_matching_multiline_overlapping_matches() {
     assert_sorted_output(
-        "python_project",
+        "rust_overlapping",
         r#"
-            $ tree-sitter-grep -q '(for_statement) @c' --language python
-            example.py:2:    for x in y:
-            example.py:3:        something()
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --only-matching
+            src/lib.rs:2:|| {
+            src/lib.rs:3:        || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    }
         "#,
     );
 }
 
 #[test]
-fn test_python_auto_language() {
+fn test_only_matching_multiline_overlapping_matches_starting_on_same_line() {
     assert_sorted_output(
-        "python_project",
+        "rust_overlapping_start_same_line",
         r#"
-            $ tree-sitter-grep -q '(for_statement) @c'
-            example.py:2:    for x in y:
-            example.py:3:        something()
-        "#,
-    );
-}
-
-#[test]
-fn test_ruby() {
-    assert_sorted_output(
-        "ruby_project",
-        r#"
-            $ tree-sitter-grep -q '(binary) @c' --language ruby
-            example.rb:1:if x > y
-        "#,
-    );
-}
-
-#[test]
-fn test_ruby_auto_language() {
-    assert_sorted_output(
-        "ruby_project",
-        r#"
-            $ tree-sitter-grep -q '(binary) @c'
-            example.rb:1:if x > y
-        "#,
-    );
-}
-
-#[test]
-fn test_c() {
-    assert_sorted_output(
-        "c_project",
-        r#"
-            $ tree-sitter-grep -q '(pointer_declarator) @c' --language c
-            example.h:1:void r_bin_object_free(void /*RBinObject*/ *o_);
-        "#,
-    );
-}
-
-#[test]
-fn test_c_auto_language() {
-    assert_failure_output(
-        "c_project",
-        r#"
-            $ tree-sitter-grep -q '(pointer_declarator) @c'
-            File "./example.h" has ambiguous file-type, could be ObjectiveC, C, or Cpp. Try passing the --language flag
-        "#,
-    );
-}
-
-#[test]
-fn test_cpp() {
-    assert_sorted_output(
-        "cpp_project",
-        r#"
-            $ tree-sitter-grep -q '(namespace_identifier) @c' --language cpp
-            example.cpp:1:const AvailableAttr *DeclAttributes::getUnavailable(
-        "#,
-    );
-}
-
-#[test]
-fn test_cpp_auto_language() {
-    assert_sorted_output(
-        "cpp_project",
-        r#"
-            $ tree-sitter-grep -q '(namespace_identifier) @c'
-            example.cpp:1:const AvailableAttr *DeclAttributes::getUnavailable(
-        "#,
-    );
-}
-
-#[test]
-fn test_go() {
-    assert_sorted_output(
-        "go_project",
-        r#"
-            $ tree-sitter-grep -q '(import_spec) @c' --language go
-            example.go:2:        "context"
-        "#,
-    );
-}
-
-#[test]
-fn test_go_auto_language() {
-    assert_sorted_output(
-        "go_project",
-        r#"
-            $ tree-sitter-grep -q '(import_spec) @c'
-            example.go:2:        "context"
-        "#,
-    );
-}
-
-#[test]
-fn test_java() {
-    assert_sorted_output(
-        "java_project",
-        r#"
-            $ tree-sitter-grep -q '(marker_annotation) @c' --language java
-            example.java:1:@ThreadSafe
-        "#,
-    );
-}
-
-#[test]
-fn test_java_auto_language() {
-    assert_sorted_output(
-        "java_project",
-        r#"
-            $ tree-sitter-grep -q '(marker_annotation) @c'
-            example.java:1:@ThreadSafe
-        "#,
-    );
-}
-
-#[test]
-fn test_c_sharp() {
-    assert_sorted_output(
-        "csharp_project",
-        r#"
-            $ tree-sitter-grep -q '(qualified_name) @c' --language c-sharp
-            example.cs:1:namespace YL.Utils.Json {}
-        "#,
-    );
-}
-
-#[test]
-fn test_c_sharp_auto_language() {
-    assert_sorted_output(
-        "csharp_project",
-        r#"
-            $ tree-sitter-grep -q '(qualified_name) @c'
-            example.cs:1:namespace YL.Utils.Json {}
-        "#,
-    );
-}
-
-#[test]
-fn test_kotlin() {
-    assert_sorted_output(
-        "kotlin_project",
-        r#"
-            $ tree-sitter-grep -q '(user_type) @c' --language kotlin
-            example.kt:2:    val barA: Int
-        "#,
-    );
-}
-
-#[test]
-fn test_kotlin_auto_language() {
-    assert_sorted_output(
-        "kotlin_project",
-        r#"
-            $ tree-sitter-grep -q '(user_type) @c'
-            example.kt:2:    val barA: Int
-        "#,
-    );
-}
-
-#[test]
-fn test_elisp() {
-    assert_sorted_output(
-        "elisp_project",
-        r#"
-            $ tree-sitter-grep -q '(quote) @c' --language elisp
-            example.el:3:  :group 'lsp-sourcekit
-            example.el:4:  :type 'file)
-        "#,
-    );
-}
-
-#[test]
-fn test_elisp_auto_language() {
-    assert_sorted_output(
-        "elisp_project",
-        r#"
-            $ tree-sitter-grep -q '(quote) @c'
-            example.el:3:  :group 'lsp-sourcekit
-            example.el:4:  :type 'file)
-        "#,
-    );
-}
-
-#[test]
-fn test_elm() {
-    assert_sorted_output(
-        "elm_project",
-        r#"
-            $ tree-sitter-grep -q '(upper_case_qid) @c' --language elm
-            example.elm:1:import Lofi.Schema exposing (Schema, Item, Kind(..))
-        "#,
-    );
-}
-
-#[test]
-fn test_elm_auto_language() {
-    assert_sorted_output(
-        "elm_project",
-        r#"
-            $ tree-sitter-grep -q '(upper_case_qid) @c'
-            example.elm:1:import Lofi.Schema exposing (Schema, Item, Kind(..))
-        "#,
-    );
-}
-
-#[test]
-fn test_dockerfile() {
-    assert_sorted_output(
-        "dockerfile_project",
-        r#"
-            $ tree-sitter-grep -q '(path) @c' --language dockerfile
-            Dockerfile:1:WORKDIR /usr/src/app
-        "#,
-    );
-}
-
-#[test]
-fn test_dockerfile_auto_language() {
-    assert_sorted_output(
-        "dockerfile_project",
-        r#"
-            $ tree-sitter-grep -q '(path) @c'
-            Dockerfile:1:WORKDIR /usr/src/app
-        "#,
-    );
-}
-
-#[test]
-fn test_html() {
-    assert_sorted_output(
-        "html_project",
-        r#"
-            $ tree-sitter-grep -q '(text) @c' --language html
-            example.html:3:    <p>hello</p>
-        "#,
-    );
-}
-
-#[test]
-fn test_html_auto_language() {
-    assert_sorted_output(
-        "html_project",
-        r#"
-            $ tree-sitter-grep -q '(text) @c'
-            example.html:3:    <p>hello</p>
-        "#,
-    );
-}
-
-#[test]
-fn test_tree_sitter_query() {
-    assert_sorted_output(
-        "tree_sitter_query_project",
-        r#"
-            $ tree-sitter-grep -q '(capture) @c' --language tree-sitter-query
-            example.scm:1:(function_item) @f
-        "#,
-    );
-}
-
-#[test]
-fn test_tree_sitter_query_auto_language() {
-    assert_sorted_output(
-        "tree_sitter_query_project",
-        r#"
-            $ tree-sitter-grep -q '(capture) @c'
-            example.scm:1:(function_item) @f
-        "#,
-    );
-}
-
-#[test]
-fn test_json() {
-    assert_sorted_output(
-        "json_project",
-        r#"
-            $ tree-sitter-grep -q '(string_content) @c' --language json
-            example.json:2:  "hello": "ok"
-        "#,
-    );
-}
-
-#[test]
-fn test_json_auto_language() {
-    assert_sorted_output(
-        "json_project",
-        r#"
-            $ tree-sitter-grep -q '(string_content) @c'
-            example.json:2:  "hello": "ok"
-        "#,
-    );
-}
-
-#[test]
-fn test_css() {
-    assert_sorted_output(
-        "css_project",
-        r#"
-            $ tree-sitter-grep -q '(tag_name) @c' --language css
-            example.css:1:h1 {
-        "#,
-    );
-}
-
-#[test]
-fn test_css_auto_language() {
-    assert_sorted_output(
-        "css_project",
-        r#"
-            $ tree-sitter-grep -q '(tag_name) @c'
-            example.css:1:h1 {
-        "#,
-    );
-}
-
-#[test]
-fn test_lua() {
-    assert_sorted_output(
-        "lua_project",
-        r#"
-            $ tree-sitter-grep -q '(identifier) @c' --language lua
-            example.lua:1:function hello()
-        "#,
-    );
-}
-
-#[test]
-fn test_lua_auto_language() {
-    assert_sorted_output(
-        "lua_project",
-        r#"
-            $ tree-sitter-grep -q '(identifier) @c'
-            example.lua:1:function hello()
+            $ tree-sitter-grep -q '(closure_expression) @c' -l rust --only-matching
+            src/lib.rs:3:|| { || {
+            src/lib.rs:4:            println!("whee");
+            src/lib.rs:5:        }
+            src/lib.rs:6:    }
         "#,
     );
 }

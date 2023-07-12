@@ -54,6 +54,9 @@ pub struct Args {
 
     #[arg(short = 'C', long, value_name = "NUM")]
     pub context: Option<usize>,
+
+    #[arg(short = 'o', long)]
+    pub only_matching: bool,
 }
 
 impl Args {
@@ -111,6 +114,7 @@ impl Args {
             .per_match(self.per_match())
             .per_match_one_line(self.per_match_one_line())
             .column(self.column())
+            .only_matching(self.only_matching)
             .build(buffer_writer.buffer())
     }
 
