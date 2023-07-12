@@ -261,6 +261,34 @@ Contributions welcome/let us know if you've written a plugin for your editor of 
 
 
 
+## Non-goals
+
+- Trying to support "everything and the kitchen sink" functionality (yes that is some slight [`ast-grep`](https://ast-grep.github.io/) shade)
+
+  We think tree-sitter-grep certainly has the potential to be a useful grep-like tool
+  in and of itself, and beyond that we're thinking of it as a "building-block" that
+  could in theory be leveraged by other tooling for eg search-and-replace, code-mod, ...
+
+  I've already had [success](https://github.com/helixbass/refactor-node-factory-wrap/pull/1)
+  using tree-sitter-grep as part of a "one-off large-scale automated refactor"
+
+- Coming up with our own custom eg querying syntax (damn it's shady over here in the shade)
+
+  I actually think the approach taken by eg [`ast-grep`](https://ast-grep.github.io/)
+  of providing a query syntax that "looks like the code" is pretty intuitive and maybe
+  the "easiest thing to reach for" in a lot of cases
+
+  I just personally am not drawn to it as an approach to tooling. I dislike that it's
+  _concealing_ the "tree-sitter-ness of it all". It feels like tree-sitter in general
+  is very ripe for building a variety of different types of tooling on top of as an
+  underlying technology and so I'm more drawn to "building blocks" that let you 
+  leverage existing knowledge/expertise and by their nature lead you down a path of
+  gaining more of that knowledge/expertise. And maybe then building your own sh** on
+  top of it (or inspired by it)
+
+
+
+
 ## Contributing/issues
 
 The code-base is a rather typical `cargo`-based Rust project
