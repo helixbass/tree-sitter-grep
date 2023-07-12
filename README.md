@@ -22,7 +22,7 @@ Dual-licensed under MIT or the [UNLICENSE](https://unlicense.org).
 
 With a [Rust toolchain](https://rustup.rs/) installed, run:
 ```
-$ cargo install tree-sitter-grep
+$ cargo install tree-sitter-grep --version 0.1.0-dev.0
 ```
 
 
