@@ -89,11 +89,11 @@ struct CachedQueries(BySupportedLanguage<OnceLock<Result<Arc<Query>, QueryError>
 impl CachedQueries {
     fn get_and_cache_query_for_language(
         &self,
-        query_source: &str,
+        query_text: &str,
         language: SupportedLanguage,
     ) -> Option<Arc<Query>> {
         self.0[language]
-            .get_or_init(|| maybe_get_query(query_source, language.language()).map(Arc::new))
+            .get_or_init(|| maybe_get_query(query_text, language.language()).map(Arc::new))
             .as_ref()
             .ok()
             .cloned()
@@ -138,10 +138,10 @@ impl CachedQueries {
 }
 
 pub fn run(args: Args) {
-    let query_source = match (args.path_to_query_file.as_ref(), args.query_source.as_ref()) {
+    let query_text = match (args.path_to_query_file.as_ref(), args.query_text.as_ref()) {
         (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
             .unwrap_or_else(|_| fail(&format!("couldn't read query file {path_to_query_file:?}"))),
-        (None, Some(query_source)) => query_source.clone(),
+        (None, Some(query_text)) => query_text.clone(),
         (None, None) => ALL_NODES_QUERY.to_owned(),
         _ => unreachable!(),
     };
@@ -176,10 +176,7 @@ pub fn run(args: Args) {
                             .iter()
                             .filter_map(|&matched_language| {
                                 cached_queries
-                                    .get_and_cache_query_for_language(
-                                        &query_source,
-                                        matched_language,
-                                    )
+                                    .get_and_cache_query_for_language(&query_text, matched_language)
                                     .map(|_| matched_language)
                             })
                             .collect::<Vec<_>>();
@@ -198,7 +195,7 @@ pub fn run(args: Args) {
                 },
             };
             let query = return_if_none!(
-                cached_queries.get_and_cache_query_for_language(&query_source, language)
+                cached_queries.get_and_cache_query_for_language(&query_text, language)
             );
             let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref());
             let printer = get_printer(&buffer_writer, &args);

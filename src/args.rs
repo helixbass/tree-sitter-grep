@@ -20,16 +20,16 @@ use crate::{
     ArgGroup::new("query_or_filter")
         .multiple(true)
         .required(true)
-        .args(&["path_to_query_file", "query_source", "filter"])
+        .args(&["path_to_query_file", "query_text", "filter"])
 ))]
 pub struct Args {
     paths: Vec<PathBuf>,
 
-    #[arg(short = 'Q', long = "query-file", conflicts_with = "query_source")]
+    #[arg(short = 'Q', long = "query-file", conflicts_with = "query_text")]
     pub path_to_query_file: Option<PathBuf>,
 
     #[arg(short, long, conflicts_with = "path_to_query_file")]
-    pub query_source: Option<String>,
+    pub query_text: Option<String>,
 
     #[arg(short, long = "capture")]
     pub capture_name: Option<String>,
