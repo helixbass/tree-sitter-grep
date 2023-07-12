@@ -299,7 +299,7 @@ fn error_disambiguate_language_for_file(
 ) {
     only_run_once!({
         err_message!(
-            "File {:?} has ambiguous file-type, could be {}",
+            "File {:?} has ambiguous file-type, could be {}. Try passing the --language flag",
             project_file_dir_entry.path(),
             join_with_or(
                 &all_matched_languages
