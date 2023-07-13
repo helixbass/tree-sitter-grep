@@ -1,25 +1,40 @@
 [package]
 name = "tree-sitter-grep"
-version = "0.1.0"
+version = "0.1.0-dev.0"
 edition = "2021"
 license = "Unlicense OR MIT"
+authors = [
+  "Julian Rosse <julian@helixbass.net>",
+  "Peter Stuart <peter@peterstuart.org>"
+]
+description = """
+tree-sitter-grep is a grep-like search tool that
+recursively searches the current directory for a
+tree-sitter query pattern. Like ripgrep, it respects
+gitignore rules.
+"""
+homepage = "https://github.com/helixbass/tree-sitter-grep"
+repository = "https://github.com/helixbass/tree-sitter-grep"
+keywords = ["tree-sitter", "grep", "search"]
+categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.70"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bstr = "1.1.0"
 bytecount = "0.6"
-clap = { version = "4.3.0", features = ["derive"] }
+clap = { version = "4.3.0", features = ["derive", "wrap_help"] }
 encoding_rs = "0.8.14"
 encoding_rs_io = "0.1.6"
-ignore = { git = "https://github.com/helixbass/ripgrep", rev = "012f2f1" }
+ignore = { package = "tree_sitter_grep_ignore", git = "https://github.com/helixbass/ripgrep", rev = "669ebd3", version = "0.4.20-dev.0" }
 libc = "0.2.144"
 libloading = "0.8.0"
 log = "0.4.5"
 memchr = "2.1"
 memmap = { package = "memmap2", version = "0.5.3" }
 once_cell = "1.18.0"
-proc_macros = { path = "proc_macros" }
+proc_macros = { package = "tree_sitter_grep_proc_macros", path = "proc_macros", version = "0.1.0-dev.0" }
 rayon = "1.7.0"
 regex = "1.8.2"
 serde = { version = "1.0.77", features = ["derive"] }
@@ -44,13 +59,10 @@ tree-sitter-objc = "1.1.0"
 tree-sitter-python = "0.20.2"
 tree-sitter-query = "0.1.0"
 tree-sitter-ruby = "0.20.0"
-tree-sitter-rust = { git = "https://github.com/helixbass/tree-sitter-rust", rev = "6327788" }
+tree-sitter-rust = { package = "tree_sitter_grep_tree-sitter-rust", git = "https://github.com/helixbass/tree-sitter-rust", rev = "781a8d9", version = "0.20.3-dev.0" }
 tree-sitter-swift = "0.3.6"
 tree-sitter-toml = "0.20.0"
 tree-sitter-typescript = "0.20.2"
-
-[lib]
-name = "tree_sitter_grep"
 
 [[bin]]
 name = "tree-sitter-grep"

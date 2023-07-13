@@ -1,7 +1,18 @@
 [package]
-name = "proc_macros"
-version = "0.1.0"
+name = "tree_sitter_grep_proc_macros"
+version = "0.1.0-dev.0"
 edition = "2021"
+license = "Unlicense OR MIT"
+authors = [
+  "Julian Rosse <julian@helixbass.net>",
+  "Peter Stuart <peter@peterstuart.org>"
+]
+description = """
+(proc-macros used internally by tree-sitter-grep)
+"""
+homepage = "https://github.com/helixbass/tree-sitter-grep"
+repository = "https://github.com/helixbass/tree-sitter-grep"
+rust-version = "1.70"
 
 [lib]
 proc-macro = true
