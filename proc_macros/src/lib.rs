@@ -128,7 +128,7 @@ fn get_token_enum_definition(
     variants_with_attributes: &[ExprPath],
 ) -> proc_macro2::TokenStream {
     quote! {
-        #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum)]
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum, strum_macros::Display)]
         pub enum #name {
             #(#variants_with_attributes),*
         }
