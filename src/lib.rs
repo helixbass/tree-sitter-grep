@@ -291,7 +291,7 @@ fn error_disambiguate_language_for_file(
             join_with_or(
                 &all_matched_languages
                     .into_iter()
-                    .map(|matched_language| format!("{:?}", matched_language))
+                    .map(|matched_language| format!("{}", matched_language))
                     .collect::<Vec<_>>()
             )
         );

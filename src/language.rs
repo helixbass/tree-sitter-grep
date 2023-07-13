@@ -10,28 +10,35 @@ use tree_sitter::Language;
 fixed_map! {
     name => SupportedLanguage,
     variants => [
-        Rust,
-        Typescript,
-        Javascript,
-        Swift,
-        ObjectiveC,
-        Toml,
-        Python,
-        Ruby,
         C,
+        #[value(name = "c++")]
+        #[strum(serialize = "C++")]
         Cpp,
-        Go,
-        Java,
+        #[strum(serialize = "C#")]
         CSharp,
-        Kotlin,
+        #[strum(serialize = "CSS")]
+        Css,
+        Dockerfile,
         Elisp,
         Elm,
-        Dockerfile,
+        Go,
+        #[strum(serialize = "HTML")]
         Html,
-        TreeSitterQuery,
+        Java,
+        Javascript,
+        #[strum(serialize = "JSON")]
         Json,
-        Css,
+        Kotlin,
         Lua,
+        #[strum(serialize = "Objective-C")]
+        ObjectiveC,
+        Python,
+        Ruby,
+        Rust,
+        Swift,
+        Toml,
+        TreeSitterQuery,
+        Typescript,
     ],
 }
 

@@ -6,12 +6,16 @@ use quote::{format_ident, quote};
 use syn::{
     bracketed,
     parse::{Parse, ParseStream},
-    parse_macro_input, Expr, ExprArray, Ident, Token,
+    parse_macro_input, Expr, ExprArray, ExprPath, Ident, Token,
 };
 
-fn expr_to_ident(expr: Expr) -> Ident {
+fn expr_path_to_ident(expr: &ExprPath) -> Ident {
+    expr.path.get_ident().unwrap().clone()
+}
+
+fn expr_to_ident(expr: &Expr) -> Ident {
     match expr {
-        Expr::Path(expr) => expr.path.get_ident().unwrap().clone(),
+        Expr::Path(expr) => expr_path_to_ident(expr),
         _ => panic!("Expected Ident"),
     }
 }
@@ -20,20 +24,20 @@ fn parse_idents_array(input: ParseStream) -> syn::Result<Vec<Ident>> {
     Ok(input
         .parse::<ExprArray>()?
         .elems
-        .into_iter()
+        .iter()
         .map(expr_to_ident)
         .collect())
 }
 
 struct FixedMapArgs {
     name: Ident,
-    variants: Vec<Ident>,
+    variants: Vec<ExprPath>,
 }
 
 impl Parse for FixedMapArgs {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut name: Option<Ident> = Default::default();
-        let mut variants: Option<Vec<Ident>> = Default::default();
+        let mut variants: Option<Vec<ExprPath>> = Default::default();
         while !input.is_empty() {
             let key: Ident = input.parse()?;
             input.parse::<Token![=>]>()?;
@@ -42,7 +46,17 @@ impl Parse for FixedMapArgs {
                     name = Some(input.parse::<Ident>()?);
                 }
                 "variants" => {
-                    variants = Some(parse_idents_array(input)?);
+                    variants = Some(
+                        input
+                            .parse::<ExprArray>()?
+                            .elems
+                            .into_iter()
+                            .map(|expr| match expr {
+                                Expr::Path(expr) => expr,
+                                _ => panic!("Expected Ident, maybe with attributes"),
+                            })
+                            .collect(),
+                    );
                 }
                 _ => panic!("didn't expect key {}", key),
             }
@@ -57,7 +71,14 @@ impl Parse for FixedMapArgs {
 
 #[proc_macro]
 pub fn fixed_map(input: TokenStream) -> TokenStream {
-    let FixedMapArgs { name, variants } = parse_macro_input!(input as FixedMapArgs);
+    let FixedMapArgs {
+        name,
+        variants: variants_with_attributes,
+    } = parse_macro_input!(input as FixedMapArgs);
+    let variants = variants_with_attributes
+        .iter()
+        .map(expr_path_to_ident)
+        .collect::<Vec<_>>();
 
     let collection_type_name = format_ident!("By{name}");
     let all_variants_collection_name = format_ident!(
@@ -65,7 +86,7 @@ pub fn fixed_map(input: TokenStream) -> TokenStream {
         name.to_string().to_plural().to_screaming_snake_case()
     );
 
-    let token_enum_definition = get_token_enum_definition(&name, &variants);
+    let token_enum_definition = get_token_enum_definition(&name, &variants_with_attributes);
     let collection_type_definition =
         get_collection_type_definition(&collection_type_name, &variants);
     let iter_implementations =
@@ -102,11 +123,14 @@ pub fn fixed_map(input: TokenStream) -> TokenStream {
     .into()
 }
 
-fn get_token_enum_definition(name: &Ident, variants: &[Ident]) -> proc_macro2::TokenStream {
+fn get_token_enum_definition(
+    name: &Ident,
+    variants_with_attributes: &[ExprPath],
+) -> proc_macro2::TokenStream {
     quote! {
-        #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum)]
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum, strum_macros::Display)]
         pub enum #name {
-            #(#variants),*
+            #(#variants_with_attributes),*
         }
     }
 }

@@ -52,7 +52,7 @@ fn test_objective_c_auto_language_ambiguous_query() {
         "objective_c_project",
         r#"
             $ tree-sitter-grep -q '(identifier) @c'
-            File "./example.h" has ambiguous file-type, could be ObjectiveC, C, or Cpp. Try passing the --language flag
+            File "./example.h" has ambiguous file-type, could be C, C++, or Objective-C. Try passing the --language flag
         "#,
     );
 }
@@ -146,7 +146,7 @@ fn test_c_auto_language() {
         "c_project",
         r#"
             $ tree-sitter-grep -q '(pointer_declarator) @c'
-            File "./example.h" has ambiguous file-type, could be ObjectiveC, C, or Cpp. Try passing the --language flag
+            File "./example.h" has ambiguous file-type, could be C, C++, or Objective-C. Try passing the --language flag
         "#,
     );
 }
@@ -156,7 +156,7 @@ fn test_cpp() {
     assert_sorted_output(
         "cpp_project",
         r#"
-            $ tree-sitter-grep -q '(namespace_identifier) @c' --language cpp
+            $ tree-sitter-grep -q '(namespace_identifier) @c' --language c++
             example.cpp:1:const AvailableAttr *DeclAttributes::getUnavailable(
         "#,
     );
