@@ -1,7 +1,6 @@
 #![allow(clippy::into_iter_on_ref)]
 
 use std::{
-    collections::HashMap,
     fmt, fs,
     path::Path,
     process,
@@ -36,7 +35,7 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
-use language::{SupportedLanguage, SupportedLanguageName, ALL_SUPPORTED_LANGUAGES};
+use language::{get_supported_language_language, BySupportedLanguage, SupportedLanguage};
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
@@ -84,7 +83,8 @@ fn join_with_or<TItem: fmt::Display>(list: &[TItem]) -> String {
     ret
 }
 
-struct CachedQueries(HashMap<SupportedLanguageName, OnceLock<Result<Arc<Query>, QueryError>>>);
+#[derive(Default)]
+struct CachedQueries(BySupportedLanguage<OnceLock<Result<Arc<Query>, QueryError>>>);
 
 impl CachedQueries {
     fn get_and_cache_query_for_language(
@@ -92,17 +92,18 @@ impl CachedQueries {
         query_source: &str,
         language: SupportedLanguage,
     ) -> Option<Arc<Query>> {
-        self.0
-            .get(&language.name)
-            .unwrap()
-            .get_or_init(|| maybe_get_query(query_source, language.language).map(Arc::new))
+        self.0[language]
+            .get_or_init(|| {
+                maybe_get_query(query_source, get_supported_language_language(language))
+                    .map(Arc::new)
+            })
             .as_ref()
             .ok()
             .cloned()
     }
 
     fn error_if_no_successful_query_parsing(&self) {
-        if !self.0.values().any(|query| {
+        if !self.0.iter().any(|query| {
             query
                 .get()
                 .and_then(|result| result.as_ref().ok())
@@ -111,23 +112,25 @@ impl CachedQueries {
             let attempted_parsings = self
                 .0
                 .iter()
+                .enumerate()
                 .filter(|(_, value)| value.get().is_some())
+                .map(|(index, value)| -> (SupportedLanguage, _) { (index.into(), value) })
                 .collect::<Vec<_>>();
             assert!(
                 !attempted_parsings.is_empty(),
                 "Should've tried to parse in at least one language or else should've already failed on no candidate files"
             );
             if attempted_parsings.len() == 1 {
-                let (&supported_language_name, once_lock) = &attempted_parsings[0];
+                let (supported_language, once_lock) = &attempted_parsings[0];
                 fail(&format!(
                     "couldn't parse query for {:?}: {}",
-                    supported_language_name,
+                    supported_language,
                     once_lock.get().unwrap().as_ref().unwrap_err()
                 ));
             } else {
                 let mut attempted_parsings = attempted_parsings
                     .into_iter()
-                    .map(|(supported_language_name, _)| format!("{supported_language_name:?}"))
+                    .map(|(supported_language, _)| format!("{supported_language:?}"))
                     .collect::<Vec<_>>();
                 attempted_parsings.sort();
                 fail(&format!(
@@ -136,17 +139,6 @@ impl CachedQueries {
                 ));
             }
         }
-    }
-}
-
-impl Default for CachedQueries {
-    fn default() -> Self {
-        Self(
-            ALL_SUPPORTED_LANGUAGES
-                .iter()
-                .map(|supported_language| (supported_language.name, Default::default()))
-                .collect(),
-        )
     }
 }
 
@@ -167,7 +159,7 @@ pub fn run(args: Args) {
     args.get_project_file_parallel_iterator().for_each(
         |(project_file_dir_entry, matched_languages)| {
             searched.store(true, Ordering::SeqCst);
-            let language = match args.language() {
+            let language = match args.language {
                 Some(specified_language) => {
                     if !matched_languages.contains(&specified_language) {
                         error_explicit_path_argument_not_of_specified_type(
@@ -222,7 +214,7 @@ pub fn run(args: Args) {
             let query_context = QueryContext::new(
                 query,
                 capture_index,
-                language.language,
+                get_supported_language_language(language),
                 args.filter.clone(),
                 args.filter_arg.clone(),
             );
@@ -279,7 +271,7 @@ fn error_explicit_path_argument_not_of_specified_type(
     err_message!(
         "File {:?} is not recognized as a {:?} file",
         project_file_dir_entry.path(),
-        language.name
+        language
     );
 }
 
@@ -304,7 +296,7 @@ fn error_disambiguate_language_for_file(
             join_with_or(
                 &all_matched_languages
                     .into_iter()
-                    .map(|matched_language| format!("{:?}", matched_language.name))
+                    .map(|matched_language| format!("{:?}", matched_language))
                     .collect::<Vec<_>>()
             )
         );
