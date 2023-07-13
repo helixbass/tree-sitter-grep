@@ -27,14 +27,14 @@ pub struct Args {
 
     /// The path to a tree-sitter query file.
     ///
-    /// This conflicts with the --query-text option.
+    /// This conflicts with the --query option.
     #[arg(short = 'Q', long = "query-file", conflicts_with = "query_text")]
     pub path_to_query_file: Option<PathBuf>,
 
     /// The source text of a tree-sitter query.
     ///
     /// This conflicts with the --query-file option.
-    #[arg(short, long, conflicts_with = "path_to_query_file")]
+    #[arg(short, long = "query", conflicts_with = "path_to_query_file")]
     pub query_text: Option<String>,
 
     /// The name of the tree-sitter query capture
