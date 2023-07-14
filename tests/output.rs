@@ -317,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset>
 
             For more information, try '--help'.
         "#,
@@ -485,6 +485,11 @@ fn test_help_option() {
                       Print only the matched (non-empty) parts of a matching line, with each such part on a
                       separate output line
 
+              -b, --byte-offset
+                      Print the 0-based byte offset within the input file before each line of output.
+
+                      If -o (--only-matching) is specified, print the offset of the matching part itself.
+
               -h, --help
                       Print help (see a summary with '-h')
         "#,
@@ -529,6 +534,8 @@ fn test_help_short_option() {
               -o, --only-matching
                       Print only the matched (non-empty) parts of a matching line, with each such part on a
                       separate output line
+              -b, --byte-offset
+                      Print the 0-based byte offset within the input file before each line of output
               -h, --help
                       Print help (see more with '--help')
         "#,
@@ -1121,6 +1128,70 @@ fn test_no_captures() {
         r#"
             $ tree-sitter-grep -q '(function_item)' --language rust
             error: query must include at least one capture ("@whatever")
+        "#,
+    );
+}
+
+#[test]
+fn test_byte_offset() {
+    assert_sorted_output(
+        "rust_project_byte_offset",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @function_item' -l rust --byte-offset
+            src/helpers.rs:1:0:pub fn helper() {}
+            src/stop.rs:1:0:fn stop_it() {}
+            src/lib.rs:3:14:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:63:    left + right
+            src/lib.rs:5:80:}
+            src/lib.rs:12:139:    fn it_works() {
+            src/lib.rs:13:159:        let result = add(2, 2);
+            src/lib.rs:14:191:        assert_eq!(result, 4);
+            src/lib.rs:15:222:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_byte_offset_short_option() {
+    assert_sorted_output(
+        "rust_project_byte_offset",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @function_item' -l rust -b
+            src/helpers.rs:1:0:pub fn helper() {}
+            src/stop.rs:1:0:fn stop_it() {}
+            src/lib.rs:3:14:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:4:63:    left + right
+            src/lib.rs:5:80:}
+            src/lib.rs:12:139:    fn it_works() {
+            src/lib.rs:13:159:        let result = add(2, 2);
+            src/lib.rs:14:191:        assert_eq!(result, 4);
+            src/lib.rs:15:222:    }
+        "#,
+    );
+}
+
+#[test]
+fn test_byte_offset_vimgrep() {
+    assert_sorted_output(
+        "rust_project_byte_offset",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @function_item' -l rust --byte-offset --vimgrep
+            src/helpers.rs:1:1:0:pub fn helper() {}
+            src/stop.rs:1:1:0:fn stop_it() {}
+            src/lib.rs:3:1:14:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:12:5:139:    fn it_works() {
+        "#,
+    );
+}
+
+#[test]
+fn test_byte_offset_only_matching() {
+    assert_sorted_output(
+        "rust_project_byte_offset",
+        r#"
+            $ tree-sitter-grep -q '(parameter) @c' -l rust --byte-offset --only-matching
+            src/lib.rs:3:25:left: usize
+            src/lib.rs:3:38:right: usize
         "#,
     );
 }

@@ -95,6 +95,14 @@ pub struct Args {
     /// such part on a separate output line.
     #[arg(short = 'o', long)]
     pub only_matching: bool,
+
+    /// Print the 0-based byte offset within the input
+    /// file before each line of output.
+    ///
+    /// If -o (--only-matching) is specified, print
+    /// the offset of the matching part itself.
+    #[arg(short = 'b', long)]
+    pub byte_offset: bool,
 }
 
 impl Args {
@@ -153,6 +161,7 @@ impl Args {
             .per_match_one_line(self.per_match_one_line())
             .column(self.column())
             .only_matching(self.only_matching)
+            .byte_offset(self.byte_offset)
             .build(buffer_writer.buffer())
     }
 
