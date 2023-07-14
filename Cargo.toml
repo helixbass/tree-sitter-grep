@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-grep"
-version = "0.1.0-dev.0"
+version = "0.1.0"
 edition = "2021"
 license = "Unlicense OR MIT"
 authors = [
@@ -34,7 +34,7 @@ log = "0.4.5"
 memchr = "2.1"
 memmap = { package = "memmap2", version = "0.5.3" }
 once_cell = "1.18.0"
-proc_macros = { package = "tree_sitter_grep_proc_macros", path = "proc_macros", version = "0.1.0-dev.0" }
+proc_macros = { package = "tree_sitter_grep_proc_macros", path = "proc_macros", version = "0.1.0" }
 rayon = "1.7.0"
 regex = "1.8.2"
 serde = { version = "1.0.77", features = ["derive"] }
