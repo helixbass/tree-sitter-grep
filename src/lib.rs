@@ -1,20 +1,19 @@
 #![allow(clippy::into_iter_on_ref)]
 
 use std::{
-    fmt, fs,
-    path::Path,
+    fmt, fs, io,
+    path::{Path, PathBuf},
     process,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
     },
-    thread,
-    time::Duration,
 };
 
 use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
+use thiserror::Error;
 use tree_sitter::{Query, QueryError};
 
 mod args;
@@ -23,7 +22,6 @@ mod line_buffer;
 mod lines;
 mod macros;
 mod matcher;
-mod messages;
 mod plugin;
 mod printer;
 mod project_file_walker;
@@ -42,38 +40,111 @@ use treesitter::maybe_get_query;
 use use_printer::get_printer;
 use use_searcher::get_searcher;
 
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("couldn't read query file {path_to_query_file:?}")]
+    QueryFileReadError {
+        path_to_query_file: PathBuf,
+        source: io::Error,
+    },
+    #[error("{}",
+        match .0.len() {
+            1 => {
+                let (supported_language, query_error) = &.0[0];
+                format!("couldn't parse query for {supported_language:?}: {query_error}")
+            }
+            _ => {
+                let mut attempted_parsings = .0
+                    .iter()
+                    .map(|(supported_language, _)| format!("{supported_language:?}"))
+                    .collect::<Vec<_>>();
+                attempted_parsings.sort();
+                format!(
+                    "couldn't parse query for {}",
+                    join_with_or(&attempted_parsings)
+                )
+            }
+        }
+    )]
+    NoSuccessfulQueryParsing(Vec<(SupportedLanguage, /* QueryError */ String)>),
+    #[error("query must include at least one capture (\"@whatever\")")]
+    NoCaptureInQuery,
+    #[error("invalid capture name '{capture_name}'")]
+    InvalidCaptureName { capture_name: String },
+}
+
+#[derive(Debug, Error)]
+pub enum NonFatalSearchError {
+    #[error("File {path:?} is not recognized as a {specified_language:?} file")]
+    ExplicitPathArgumentNotOfSpecifiedType {
+        path: PathBuf,
+        specified_language: SupportedLanguage,
+    },
+    #[error("File {path:?} does not belong to a recognized language")]
+    ExplicitPathArgumentNotOfKnownType { path: PathBuf },
+    #[error(
+        "File {path:?} has ambiguous file-type, could be {}. Try passing the --language flag",
+        join_with_or(
+            &.languages
+                .into_iter()
+                .map(|language| format!("{}", language))
+                .collect::<Vec<_>>()
+        )
+    )]
+    AmbiguousLanguageForFile {
+        path: PathBuf,
+        languages: Vec<SupportedLanguage>,
+    },
+    #[error("The provided query could not be parsed for the language of file {path:?}")]
+    QueryNotParseableForFile { path: PathBuf },
+    #[error("No files were searched")]
+    NothingSearched,
+    #[error("{error}")]
+    IgnoreError {
+        #[from]
+        error: ignore::Error,
+    },
+}
+
+#[derive(Clone)]
+enum CaptureIndexError {
+    NoCaptureInQuery,
+    InvalidCaptureName { capture_name: String },
+}
+
+impl From<CaptureIndexError> for Error {
+    fn from(value: CaptureIndexError) -> Self {
+        match value {
+            CaptureIndexError::NoCaptureInQuery => Self::NoCaptureInQuery,
+            CaptureIndexError::InvalidCaptureName { capture_name } => {
+                Self::InvalidCaptureName { capture_name }
+            }
+        }
+    }
+}
+
 #[derive(Default)]
-struct CaptureIndex(OnceLock<Result<u32, ()>>);
+struct CaptureIndex(OnceLock<Result<u32, CaptureIndexError>>);
 
 impl CaptureIndex {
-    pub fn get_or_init(&self, query: &Query, capture_name: Option<&str>) -> u32 {
-        let mut failure_message: Option<String> = Default::default();
+    pub fn get_or_init(
+        &self,
+        query: &Query,
+        capture_name: Option<&str>,
+    ) -> Result<u32, CaptureIndexError> {
         self.0
             .get_or_init(|| match capture_name {
                 None => match query.capture_names().len() {
-                    0 => {
-                        failure_message = Some(
-                            "query must include at least one capture (\"@whatever\")".to_owned(),
-                        );
-                        #[allow(clippy::unit_arg)]
-                        Err(Default::default())
-                    }
+                    0 => Err(CaptureIndexError::NoCaptureInQuery),
                     _ => Ok(0),
                 },
                 Some(capture_name) => query.capture_index_for_name(capture_name).ok_or_else(|| {
-                    failure_message = Some(format!("invalid capture name '{}'", capture_name));
-                    Default::default()
+                    CaptureIndexError::InvalidCaptureName {
+                        capture_name: capture_name.to_owned(),
+                    }
                 }),
             })
-            .unwrap_or_else(|_| {
-                if let Some(failure_message) = failure_message {
-                    fail(&failure_message);
-                }
-                // whichever (other?) thread "won the race" will have called fail()
-                // so we'll be getting killed shortly?
-                thread::sleep(Duration::from_millis(100_000));
-                panic!("Should never get this far");
-            })
+            .clone()
     }
 }
 
@@ -108,7 +179,7 @@ impl CachedQueries {
             .cloned()
     }
 
-    fn error_if_no_successful_query_parsing(&self) {
+    fn error_if_no_successful_query_parsing(&self) -> Result<(), Error> {
         if !self.0.values().any(|query| {
             query
                 .get()
@@ -124,32 +195,65 @@ impl CachedQueries {
                 !attempted_parsings.is_empty(),
                 "Should've tried to parse in at least one language or else should've already failed on no candidate files"
             );
-            if attempted_parsings.len() == 1 {
-                let (supported_language, once_lock) = &attempted_parsings[0];
-                fail(&format!(
-                    "couldn't parse query for {:?}: {}",
-                    supported_language,
-                    once_lock.get().unwrap().as_ref().unwrap_err()
-                ));
-            } else {
-                let mut attempted_parsings = attempted_parsings
+            return Err(Error::NoSuccessfulQueryParsing(
+                attempted_parsings
                     .into_iter()
-                    .map(|(supported_language, _)| format!("{supported_language:?}"))
-                    .collect::<Vec<_>>();
-                attempted_parsings.sort();
-                fail(&format!(
-                    "couldn't parse query for {}",
-                    join_with_or(&attempted_parsings)
-                ));
-            }
+                    .map(|(supported_language, once_lock)| {
+                        (
+                            supported_language,
+                            format!("{}", once_lock.get().unwrap().as_ref().unwrap_err()),
+                        )
+                    })
+                    .collect(),
+            ));
         }
+
+        Ok(())
     }
 }
 
-pub fn run(args: Args) {
+pub struct RunStatus {
+    pub matched: bool,
+    pub non_fatal_errors: Vec<NonFatalSearchError>,
+}
+
+enum SingleFileSearchError {
+    NonFatalSearchError(NonFatalSearchError),
+    FatalError(Error),
+}
+
+impl From<Error> for SingleFileSearchError {
+    fn from(value: Error) -> Self {
+        Self::FatalError(value)
+    }
+}
+
+impl From<NonFatalSearchError> for SingleFileSearchError {
+    fn from(value: NonFatalSearchError) -> Self {
+        Self::NonFatalSearchError(value)
+    }
+}
+
+impl<TSuccess> From<Error> for Result<TSuccess, SingleFileSearchError> {
+    fn from(value: Error) -> Self {
+        Err(value.into())
+    }
+}
+
+impl<TSuccess> From<NonFatalSearchError> for Result<TSuccess, SingleFileSearchError> {
+    fn from(value: NonFatalSearchError) -> Self {
+        Err(value.into())
+    }
+}
+
+pub fn run(args: Args) -> Result<RunStatus, Error> {
     let query_text = match (args.path_to_query_file.as_ref(), args.query_text.as_ref()) {
-        (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
-            .unwrap_or_else(|_| fail(&format!("couldn't read query file {path_to_query_file:?}"))),
+        (Some(path_to_query_file), None) => {
+            fs::read_to_string(path_to_query_file).map_err(|source| Error::QueryFileReadError {
+                source,
+                path_to_query_file: path_to_query_file.clone(),
+            })?
+        }
         (None, Some(query_text)) => query_text.clone(),
         (None, None) => ALL_NODES_QUERY.to_owned(),
         _ => unreachable!(),
@@ -159,25 +263,30 @@ pub fn run(args: Args) {
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
+    let non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>> = Default::default();
 
-    args.get_project_file_parallel_iterator().for_each(
-        |(project_file_dir_entry, matched_languages)| {
+    for_each_project_file(
+        &args,
+        non_fatal_errors.clone(),
+        |project_file_dir_entry, matched_languages| -> Result<(), SingleFileSearchError> {
             searched.store(true, Ordering::SeqCst);
             let language = match args.language {
                 Some(specified_language) => {
                     if !matched_languages.contains(&specified_language) {
-                        error_explicit_path_argument_not_of_specified_type(
-                            &project_file_dir_entry,
+                        return NonFatalSearchError::ExplicitPathArgumentNotOfSpecifiedType {
+                            path: project_file_dir_entry.path().to_owned(),
                             specified_language,
-                        );
-                        return;
+                        }
+                        .into();
                     }
                     specified_language
                 }
                 None => match matched_languages.len() {
                     0 => {
-                        error_explicit_path_argument_not_of_known_type(&project_file_dir_entry);
-                        return;
+                        return NonFatalSearchError::ExplicitPathArgumentNotOfKnownType {
+                            path: project_file_dir_entry.path().to_owned(),
+                        }
+                        .into();
                     }
                     1 => matched_languages[0],
                     _ => {
@@ -190,23 +299,32 @@ pub fn run(args: Args) {
                             })
                             .collect::<Vec<_>>();
                         match successfully_parsed_query_languages.len() {
-                            0 => return,
+                            0 => {
+                                return NonFatalSearchError::QueryNotParseableForFile {
+                                    path: project_file_dir_entry.path().to_owned(),
+                                }
+                                .into();
+                            }
                             1 => successfully_parsed_query_languages[0],
                             _ => {
-                                error_disambiguate_language_for_file(
-                                    &project_file_dir_entry,
-                                    &successfully_parsed_query_languages,
-                                );
-                                return;
+                                return NonFatalSearchError::AmbiguousLanguageForFile {
+                                    path: project_file_dir_entry.path().to_owned(),
+                                    languages: successfully_parsed_query_languages,
+                                }
+                                .into();
                             }
                         }
                     }
                 },
             };
-            let query = return_if_none!(
-                cached_queries.get_and_cache_query_for_language(&query_text, language)
-            );
-            let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref());
+            let query = cached_queries
+                .get_and_cache_query_for_language(&query_text, language)
+                .ok_or_else(|| NonFatalSearchError::QueryNotParseableForFile {
+                    path: project_file_dir_entry.path().to_owned(),
+                })?;
+            let capture_index = capture_index
+                .get_or_init(&query, args.capture_name.as_deref())
+                .map_err(Error::from)?;
             let printer = get_printer(&buffer_writer, &args);
             let mut printer = printer.borrow_mut();
             let path =
@@ -230,50 +348,65 @@ pub fn run(args: Args) {
                 matched.store(true, Ordering::SeqCst);
             }
             buffer_writer.print(printer.get_mut()).unwrap();
-        },
-    );
 
-    if !messages::errored() {
+            Ok(())
+        },
+    )?;
+
+    let mut non_fatal_errors = Arc::into_inner(non_fatal_errors)
+        .unwrap()
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .filter(|non_fatal_error| {
+            !matches!(
+                non_fatal_error,
+                NonFatalSearchError::QueryNotParseableForFile { .. }
+            )
+        })
+        .collect::<Vec<_>>();
+    if non_fatal_errors.is_empty() {
         if !searched.load(Ordering::SeqCst) {
-            eprint_nothing_searched();
+            non_fatal_errors.push(NonFatalSearchError::NothingSearched);
         } else {
-            cached_queries.error_if_no_successful_query_parsing();
+            cached_queries.error_if_no_successful_query_parsing()?;
         }
     }
 
-    if messages::errored() {
-        exit(ExitCode::Error);
-    } else if matched.load(Ordering::SeqCst) {
-        exit(ExitCode::Success);
-    } else {
-        exit(ExitCode::NoMatches);
+    Ok(RunStatus {
+        matched: matched.load(Ordering::SeqCst),
+        non_fatal_errors,
+    })
+}
+
+fn for_each_project_file(
+    args: &Args,
+    non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>>,
+    callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> Result<(), SingleFileSearchError> + Sync,
+) -> Result<(), Error> {
+    let fatal_error: Mutex<Option<Error>> = Default::default();
+    args.get_project_file_parallel_iterator(non_fatal_errors.clone())
+        .for_each(|(project_file_dir_entry, matched_languages)| {
+            if fatal_error.lock().unwrap().is_some() {
+                return;
+            }
+
+            if let Err(error) = callback(project_file_dir_entry, matched_languages) {
+                match error {
+                    SingleFileSearchError::NonFatalSearchError(error) => {
+                        non_fatal_errors.lock().unwrap().push(error);
+                    }
+                    SingleFileSearchError::FatalError(error) => {
+                        *fatal_error.lock().unwrap() = Some(error);
+                    }
+                }
+            }
+        });
+
+    match fatal_error.into_inner().unwrap() {
+        Some(fatal_error) => Err(fatal_error),
+        None => Ok(()),
     }
-}
-
-fn eprint_nothing_searched() {
-    err_message!("No files were searched");
-}
-
-fn error_explicit_path_argument_not_of_known_type(project_file_dir_entry: &DirEntry) {
-    // TODO: assert the assumed invariant that this was in fact an explicitly-passed
-    // path?
-    err_message!(
-        "File {:?} does not belong to a recognized language",
-        project_file_dir_entry.path()
-    );
-}
-
-fn error_explicit_path_argument_not_of_specified_type(
-    project_file_dir_entry: &DirEntry,
-    language: SupportedLanguage,
-) {
-    // TODO: assert the assumed invariant that this was in fact an explicitly-passed
-    // path?
-    err_message!(
-        "File {:?} is not recognized as a {:?} file",
-        project_file_dir_entry.path(),
-        language
-    );
 }
 
 #[macro_export]
@@ -284,24 +417,6 @@ macro_rules! only_run_once {
             $block;
         });
     };
-}
-
-fn error_disambiguate_language_for_file(
-    project_file_dir_entry: &DirEntry,
-    all_matched_languages: &[SupportedLanguage],
-) {
-    only_run_once!({
-        err_message!(
-            "File {:?} has ambiguous file-type, could be {}. Try passing the --language flag",
-            project_file_dir_entry.path(),
-            join_with_or(
-                &all_matched_languages
-                    .into_iter()
-                    .map(|matched_language| format!("{}", matched_language))
-                    .collect::<Vec<_>>()
-            )
-        );
-    });
 }
 
 fn fail(message: &str) -> ! {
