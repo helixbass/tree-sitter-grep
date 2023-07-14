@@ -1122,6 +1122,17 @@ fn test_only_matching_multiline_overlapping_matches_starting_on_same_line() {
 }
 
 #[test]
+fn test_no_captures() {
+    assert_failure_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item)' --language rust
+            error: query must include at least one capture ("@whatever")
+        "#,
+    );
+}
+
+#[test]
 fn test_byte_offset() {
     assert_sorted_output(
         "rust_project",

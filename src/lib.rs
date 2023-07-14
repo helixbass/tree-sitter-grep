@@ -47,18 +47,27 @@ struct CaptureIndex(OnceLock<Result<u32, ()>>);
 
 impl CaptureIndex {
     pub fn get_or_init(&self, query: &Query, capture_name: Option<&str>) -> u32 {
-        let mut did_mark_failed = false;
+        let mut failure_message: Option<String> = Default::default();
         self.0
             .get_or_init(|| match capture_name {
-                None => Ok(0),
+                None => match query.capture_names().len() {
+                    0 => {
+                        failure_message = Some(
+                            "query must include at least one capture (\"@whatever\")".to_owned(),
+                        );
+                        #[allow(clippy::unit_arg)]
+                        Err(Default::default())
+                    }
+                    _ => Ok(0),
+                },
                 Some(capture_name) => query.capture_index_for_name(capture_name).ok_or_else(|| {
-                    did_mark_failed = true;
+                    failure_message = Some(format!("invalid capture name '{}'", capture_name));
                     Default::default()
                 }),
             })
             .unwrap_or_else(|_| {
-                if did_mark_failed {
-                    fail(&format!("invalid capture name '{}'", capture_name.unwrap()));
+                if let Some(failure_message) = failure_message {
+                    fail(&failure_message);
                 }
                 // whichever (other?) thread "won the race" will have called fail()
                 // so we'll be getting killed shortly?
