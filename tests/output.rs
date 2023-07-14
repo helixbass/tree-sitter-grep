@@ -1135,7 +1135,7 @@ fn test_no_captures() {
 #[test]
 fn test_byte_offset() {
     assert_sorted_output(
-        "rust_project",
+        "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' -l rust --byte-offset
             src/helpers.rs:1:0:pub fn helper() {}
@@ -1154,7 +1154,7 @@ fn test_byte_offset() {
 #[test]
 fn test_byte_offset_short_option() {
     assert_sorted_output(
-        "rust_project",
+        "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' -l rust -b
             src/helpers.rs:1:0:pub fn helper() {}
@@ -1173,7 +1173,7 @@ fn test_byte_offset_short_option() {
 #[test]
 fn test_byte_offset_vimgrep() {
     assert_sorted_output(
-        "rust_project",
+        "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' -l rust --byte-offset --vimgrep
             src/helpers.rs:1:1:0:pub fn helper() {}
@@ -1187,7 +1187,7 @@ fn test_byte_offset_vimgrep() {
 #[test]
 fn test_byte_offset_only_matching() {
     assert_sorted_output(
-        "rust_project",
+        "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(parameter) @c' -l rust --byte-offset --only-matching
             src/lib.rs:3:25:left: usize
