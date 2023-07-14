@@ -27,55 +27,52 @@ pub struct Args {
 
     /// The path to a tree-sitter query file.
     ///
-    /// This conflicts with the --query-text option.
+    /// This conflicts with the --query option.
     #[arg(short = 'Q', long = "query-file", conflicts_with = "query_text")]
     pub path_to_query_file: Option<PathBuf>,
 
     /// The source text of a tree-sitter query.
     ///
     /// This conflicts with the --query-file option.
-    #[arg(short, long, conflicts_with = "path_to_query_file")]
+    #[arg(short, long = "query", conflicts_with = "path_to_query_file")]
     pub query_text: Option<String>,
 
-    /// The name of the tree-sitter query capture
-    /// (without leading "@")
-    /// whose matching nodes will be output.
+    /// The name of the tree-sitter query capture (without leading "@") whose
+    /// matching nodes will be output.
     ///
-    /// By default this is the "first" capture encountered
-    /// in the query source text.
+    /// By default this is the "first" capture encountered in the query source
+    /// text.
     #[arg(short, long = "capture")]
     pub capture_name: Option<String>,
 
     /// The target language for matching.
     ///
-    /// By default all files corresponding to supported
-    /// languages will be searched if the provided query
-    /// can be successfully parsed for that language.
+    /// By default all files corresponding to supported languages will be
+    /// searched if the provided query can be successfully parsed for that
+    /// language.
     #[arg(short, long, value_enum)]
     pub language: Option<SupportedLanguage>,
 
-    /// The path to a dynamic library that can be used as a
-    /// "filter plugin".
+    /// The path to a dynamic library that can be used as a "filter plugin".
     ///
-    /// Filter plugins allow for more fine-grained filtering
-    /// of potentially matching tree-sitter AST nodes.
+    /// Filter plugins allow for more fine-grained filtering of potentially
+    /// matching tree-sitter AST nodes.
     #[arg(short, long, value_name = "PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY")]
     pub filter: Option<String>,
 
-    /// An arbitrary argument to be passed to the specified
-    /// filter plugin.
+    /// An arbitrary argument to be passed to the specified filter plugin.
     ///
-    /// It is up to the specific filter plugin whether it
-    /// requires an argument to be passed (eg for self-configuration)
-    /// and if so what format it expects that argument to be in.
+    /// It is up to the specific filter plugin whether it requires an argument
+    /// to be passed (eg for self-configuration) and if so what format it
+    /// expects that argument to be in.
     #[arg(short = 'a', long, requires = "filter")]
     pub filter_arg: Option<String>,
 
-    /// Show results with every match on its own line, including
-    /// line numbers and column numbers.
+    /// Show results with every match on its own line, including line numbers
+    /// and column numbers.
     ///
-    /// With this option, a line with more that one match will
-    /// be printed more than once.
+    /// With this option, a line with more that one match will be printed more
+    /// than once.
     #[arg(long)]
     vimgrep: bool,
 
@@ -89,14 +86,13 @@ pub struct Args {
 
     /// Show NUM lines before and after each match.
     ///
-    /// This is equivalent to providing both the
-    /// -B/--before-context and -A/--after-context flags
-    /// with the same value.
+    /// This is equivalent to providing both the -B/--before-context and
+    /// -A/--after-context flags with the same value.
     #[arg(short = 'C', long, value_name = "NUM")]
     pub context: Option<usize>,
 
-    /// Print only the matched (non-empty) parts of a matching line,
-    /// with each such part on a separate output line.
+    /// Print only the matched (non-empty) parts of a matching line, with each
+    /// such part on a separate output line.
     #[arg(short = 'o', long)]
     pub only_matching: bool,
 

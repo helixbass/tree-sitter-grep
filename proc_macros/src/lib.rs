@@ -128,7 +128,7 @@ fn get_token_enum_definition(
     variants_with_attributes: &[ExprPath],
 ) -> proc_macro2::TokenStream {
     quote! {
-        #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum)]
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, clap::ValueEnum, strum_macros::Display)]
         pub enum #name {
             #(#variants_with_attributes),*
         }
@@ -330,6 +330,9 @@ impl Parse for ByFixedMapArgs {
             let key: Ident = value_mapping_content.parse()?;
             value_mapping_content.parse::<Token![=>]>()?;
             let value: Expr = value_mapping_content.parse()?;
+            if value_mapping.contains_key(&key) {
+                panic!("Repeated key: {key}");
+            }
             value_mapping.insert(key, value);
             if value_mapping_content.is_empty() {
                 break;

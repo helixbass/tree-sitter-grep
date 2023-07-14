@@ -12,19 +12,25 @@ fixed_map! {
     variants => [
         C,
         #[value(name = "c++")]
+        #[strum(serialize = "C++")]
         Cpp,
+        #[strum(serialize = "C#")]
         CSharp,
+        #[strum(serialize = "CSS")]
         Css,
         Dockerfile,
         Elisp,
         Elm,
         Go,
+        #[strum(serialize = "HTML")]
         Html,
         Java,
         Javascript,
+        #[strum(serialize = "JSON")]
         Json,
         Kotlin,
         Lua,
+        #[strum(serialize = "Objective-C")]
         ObjectiveC,
         Python,
         Ruby,

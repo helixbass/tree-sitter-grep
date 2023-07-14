@@ -47,7 +47,7 @@ src/mod.rs:644:        M: Matcher,
 tree-sitter-grep uses [tree-sitter queries](https://tree-sitter.github.io/tree-sitter/using-parsers#pattern-matching-with-queries)
 to specify "patterns" to match
 
-You can either specify the query "inline" with the `-q`/`--query-text` argument:
+You can either specify the query "inline" with the `-q`/`--query` argument:
 ```
 $ tree-sitter-grep -q '(trait_bounds) @t'
 ```

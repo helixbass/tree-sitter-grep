@@ -10,7 +10,7 @@ fn test_query_inline() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_item) @function_item' --language rust
+            $ tree-sitter-grep --query '(function_item) @function_item' --language rust
             src/helpers.rs:1:pub fn helper() {}
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:4:    left + right
@@ -48,7 +48,7 @@ fn test_vimgrep_mode() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_item) @function_item' --language rust --vimgrep
+            $ tree-sitter-grep --query '(function_item) @function_item' --language rust --vimgrep
             src/helpers.rs:1:1:pub fn helper() {}
             src/lib.rs:3:1:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:12:5:    fn it_works() {
@@ -100,7 +100,7 @@ fn test_specify_single_file() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_item) @function_item' --language rust src/lib.rs
+            $ tree-sitter-grep --query '(function_item) @function_item' --language rust src/lib.rs
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:4:    left + right
             src/lib.rs:5:}
@@ -117,7 +117,7 @@ fn test_specify_single_file_preserves_leading_dot_slash() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_item) @function_item' --language rust ./src/lib.rs
+            $ tree-sitter-grep --query '(function_item) @function_item' --language rust ./src/lib.rs
             ./src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             ./src/lib.rs:4:    left + right
             ./src/lib.rs:5:}
@@ -134,7 +134,7 @@ fn test_specify_multiple_files() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_item) @function_item' --language rust src/lib.rs ./src/helpers.rs
+            $ tree-sitter-grep --query '(function_item) @function_item' --language rust src/lib.rs ./src/helpers.rs
             ./src/helpers.rs:1:pub fn helper() {}
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:4:    left + right
@@ -152,7 +152,7 @@ fn test_invalid_query_inline() {
     assert_failure_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_itemz) @function_item' --language rust
+            $ tree-sitter-grep --query '(function_itemz) @function_item' --language rust
             error: couldn't parse query for Rust: Query error at 1:2. Invalid node type function_itemz
         "#,
     );
@@ -176,9 +176,9 @@ fn test_no_query_or_filter_specified() {
         r#"
             $ tree-sitter-grep --language rust
             error: the following required arguments were not provided:
-              <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>>
+              <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>>
 
-            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
@@ -312,12 +312,12 @@ fn test_unknown_option() {
     assert_failure_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-textz '(function_item) @function_item' --language rust
-            error: unexpected argument '--query-textz' found
+            $ tree-sitter-grep --queryz '(function_item) @function_item' --language rust
+            error: unexpected argument '--queryz' found
 
-              tip: a similar argument exists: '--query-text'
+              tip: a similar argument exists: '--query'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset>
 
             For more information, try '--help'.
         "#,
@@ -403,10 +403,10 @@ fn test_query_inline_and_query_file_path() {
     assert_failure_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query-text '(function_item) @function_item' --query-file ./function-item.scm --language rust
-            error: the argument '--query-text <QUERY_TEXT>' cannot be used with '--query-file <PATH_TO_QUERY_FILE>'
+            $ tree-sitter-grep --query '(function_item) @function_item' --query-file ./function-item.scm --language rust
+            error: the argument '--query <QUERY_TEXT>' cannot be used with '--query-file <PATH_TO_QUERY_FILE>'
 
-            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+            Usage: tree-sitter-grep --language <LANGUAGE> <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
@@ -419,7 +419,7 @@ fn test_help_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep --help
-            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             Arguments:
               [PATHS]...
@@ -429,9 +429,9 @@ fn test_help_option() {
               -Q, --query-file <PATH_TO_QUERY_FILE>
                       The path to a tree-sitter query file.
 
-                      This conflicts with the --query-text option.
+                      This conflicts with the --query option.
 
-              -q, --query-text <QUERY_TEXT>
+              -q, --query <QUERY_TEXT>
                       The source text of a tree-sitter query.
 
                       This conflicts with the --query-file option.
@@ -502,7 +502,7 @@ fn test_help_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -h
-            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+            Usage: tree-sitter-grep [OPTIONS] <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             Arguments:
               [PATHS]...
@@ -510,7 +510,7 @@ fn test_help_short_option() {
             Options:
               -Q, --query-file <PATH_TO_QUERY_FILE>
                       The path to a tree-sitter query file
-              -q, --query-text <QUERY_TEXT>
+              -q, --query <QUERY_TEXT>
                       The source text of a tree-sitter query
               -c, --capture <CAPTURE_NAME>
                       The name of the tree-sitter query capture (without leading "@") whose matching nodes will
@@ -549,9 +549,9 @@ fn test_no_arguments() {
         r#"
             $ tree-sitter-grep
             error: the following required arguments were not provided:
-              <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>>
+              <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>>
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
@@ -569,7 +569,7 @@ fn test_filter_argument_no_filter() {
             error: the following required arguments were not provided:
               --filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>
 
-            Usage: tree-sitter-grep --language <LANGUAGE> --filter-arg <FILTER_ARG> <--query-file <PATH_TO_QUERY_FILE>|--query-text <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
+            Usage: tree-sitter-grep --language <LANGUAGE> --filter-arg <FILTER_ARG> <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> [PATHS]...
 
             For more information, try '--help'.
         "#,
