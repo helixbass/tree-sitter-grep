@@ -66,7 +66,7 @@ pub enum Error {
             }
         }
     )]
-    NoSuccessfulQueryParsing(Vec<(SupportedLanguage, /* QueryError */ String)>),
+    NoSuccessfulQueryParsing(Vec<(SupportedLanguage, QueryError)>),
     #[error("query must include at least one capture (\"@whatever\")")]
     NoCaptureInQuery,
     #[error("invalid capture name '{capture_name}'")]
@@ -181,7 +181,7 @@ impl CachedQueries {
             .cloned()
     }
 
-    fn error_if_no_successful_query_parsing(&self) -> Result<(), Error> {
+    fn error_if_no_successful_query_parsing(self) -> Result<(), Error> {
         if !self.0.values().any(|query| {
             query
                 .get()
@@ -190,24 +190,20 @@ impl CachedQueries {
         }) {
             let attempted_parsings = self
                 .0
-                .iter()
+                .into_iter()
                 .filter(|(_, value)| value.get().is_some())
+                .map(|(supported_language, once_lock)| {
+                    (
+                        supported_language,
+                        once_lock.into_inner().unwrap().unwrap_err(),
+                    )
+                })
                 .collect::<Vec<_>>();
             assert!(
                 !attempted_parsings.is_empty(),
                 "Should've tried to parse in at least one language or else should've already failed on no candidate files"
             );
-            return Err(Error::NoSuccessfulQueryParsing(
-                attempted_parsings
-                    .into_iter()
-                    .map(|(supported_language, once_lock)| {
-                        (
-                            supported_language,
-                            format!("{}", once_lock.get().unwrap().as_ref().unwrap_err()),
-                        )
-                    })
-                    .collect(),
-            ));
+            return Err(Error::NoSuccessfulQueryParsing(attempted_parsings));
         }
 
         Ok(())
