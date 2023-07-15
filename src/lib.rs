@@ -3,7 +3,6 @@
 use std::{
     fmt, fs, io,
     path::{Path, PathBuf},
-    process,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex, OnceLock,
@@ -11,6 +10,7 @@ use std::{
 };
 
 use ignore::DirEntry;
+use plugin::get_loaded_filter;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
@@ -71,6 +71,10 @@ pub enum Error {
     NoCaptureInQuery,
     #[error("invalid capture name '{capture_name}'")]
     InvalidCaptureName { capture_name: String },
+    #[error("plugin expected '--filter-arg <ARGUMENT>'")]
+    FilterPluginExpectedArgument,
+    #[error("plugin couldn't parse argument {filter_arg:?}")]
+    FilterPluginCouldntParseArgument { filter_arg: String },
 }
 
 #[derive(Debug, Error)]
@@ -258,6 +262,8 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
         (None, None) => ALL_NODES_QUERY.to_owned(),
         _ => unreachable!(),
     };
+    let filter =
+        get_loaded_filter(args.filter.as_deref(), args.filter_arg.as_deref())?.map(Arc::new);
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
@@ -330,13 +336,8 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
             let path =
                 format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
 
-            let query_context = QueryContext::new(
-                query,
-                capture_index,
-                language.language(),
-                args.filter.clone(),
-                args.filter_arg.clone(),
-            );
+            let query_context =
+                QueryContext::new(query, capture_index, language.language(), filter.clone());
 
             printer.get_mut().clear();
             let mut sink = printer.sink_with_path(path);
@@ -419,26 +420,10 @@ macro_rules! only_run_once {
     };
 }
 
-fn fail(message: &str) -> ! {
-    eprintln!("error: {message}");
-    exit(ExitCode::Error);
-}
-
 fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
     if is_using_default_paths && path.starts_with("./") {
         path.strip_prefix("./").unwrap()
     } else {
         path
     }
-}
-
-#[derive(Copy, Clone)]
-enum ExitCode {
-    Success = 0,
-    NoMatches = 1,
-    Error = 2,
-}
-
-fn exit(exit_code: ExitCode) -> ! {
-    process::exit(exit_code as i32);
 }

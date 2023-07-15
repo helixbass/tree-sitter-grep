@@ -4,7 +4,6 @@ use tree_sitter::{Node, QueryCursor};
 
 use crate::{
     lines::{self, LineStep},
-    plugin::get_loaded_filter,
     query_context::QueryContext,
     searcher::{core::Core, Config, Range, Searcher},
     sink::Sink,
@@ -80,12 +79,9 @@ impl<'s, S: Sink> MultiLine<'s, S> {
             let tree = get_parser(self.core.query_context().language)
                 .parse(self.slice, None)
                 .unwrap();
-            let filter = get_loaded_filter(
-                self.core.query_context().filter_library_path.as_deref(),
-                self.core.query_context().filter_arg.as_deref(),
-            );
             let query = self.core.query_context().query.clone();
             let capture_index = self.core.query_context().capture_index;
+            let filter = self.core.query_context().filter.clone();
             let mut matches = query_cursor
                 .captures(&query, tree.root_node(), self.slice)
                 .filter_map(|(match_, found_capture_index)| {
@@ -99,7 +95,7 @@ impl<'s, S: Sink> MultiLine<'s, S> {
                         nodes_for_this_capture.next().is_none(),
                         "I guess .captures() always wraps up the single capture like this?"
                     );
-                    match filter {
+                    match filter.as_ref() {
                         None => Some(single_captured_node),
                         Some(filter) => filter
                             .call(&single_captured_node)
