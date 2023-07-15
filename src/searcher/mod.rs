@@ -214,18 +214,36 @@ impl Searcher {
         self.search_file_maybe_path(query_context, Some(path), &file, write_to)
     }
 
-    pub fn search_path_callback<P>(
+    pub fn search_path_callback<P, TError: SinkError>(
         &mut self,
         query_context: QueryContext,
         path: P,
-        callback: impl Fn(Node, &[u8]),
-    ) -> Result<(), io::Error>
+        callback: impl Fn(Node, &[u8], &Path),
+    ) -> Result<(), TError>
     where
         P: AsRef<Path>,
     {
         let path = path.as_ref();
-        let file = File::open(path)?;
-        self.search_file_maybe_path_callback(query_context, Some(path), &file, callback)
+        let file = File::open(path).map_err(TError::error_io)?;
+
+        if let Some(mmap) = self.config.mmap.open(&file, Some(path)) {
+            log::trace!("{:?}: searching via memory map", path);
+            return self
+                .search_slice_callback(query_context, &mmap, callback, path)
+                .map_err(TError::error_config);
+        }
+        log::trace!("{:?}: reading entire file on to heap for mulitline", path);
+        self.fill_multi_line_buffer_from_file(&file)
+            .map_err(TError::error_io)?;
+        log::trace!("{:?}: searching via multiline strategy", path);
+        self.run_with_callback(
+            query_context,
+            &self.multi_line_buffer.borrow(),
+            callback,
+            path,
+        );
+
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -267,28 +285,6 @@ impl Searcher {
             write_to,
         )
         .run()
-    }
-
-    fn search_file_maybe_path_callback<TError: SinkError>(
-        &mut self,
-        query_context: QueryContext,
-        path: Option<&Path>,
-        file: &File,
-        callback: impl Fn(Node, &[u8]),
-    ) -> Result<(), TError> {
-        if let Some(mmap) = self.config.mmap.open(file, path) {
-            log::trace!("{:?}: searching via memory map", path);
-            return self
-                .search_slice_callback(query_context, &mmap, callback)
-                .map_err(TError::error_config);
-        }
-        log::trace!("{:?}: reading entire file on to heap for mulitline", path);
-        self.fill_multi_line_buffer_from_file(file)
-            .map_err(TError::error_io)?;
-        log::trace!("{:?}: searching via multiline strategy", path);
-        self.run_with_callback(query_context, &self.multi_line_buffer.borrow(), callback);
-
-        Ok(())
     }
 
     #[allow(dead_code)]
@@ -342,12 +338,13 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(Node, &[u8]),
+        callback: impl Fn(Node, &[u8], &Path),
+        path: &Path,
     ) -> Result<(), ConfigError> {
         self.check_config()?;
 
         log::trace!("slice reader: searching via multiline strategy");
-        self.run_with_callback(query_context, slice, callback);
+        self.run_with_callback(query_context, slice, callback, path);
 
         Ok(())
     }
@@ -356,7 +353,8 @@ impl Searcher {
         &self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(Node, &[u8]),
+        callback: impl Fn(Node, &[u8], &Path),
+        path: &Path,
     ) {
         let mut query_cursor = QueryCursor::new();
         let tree = get_parser(query_context.language)
@@ -386,7 +384,7 @@ impl Searcher {
                 }
             })
             .for_each(|node| {
-                callback(node, slice);
+                callback(node, slice, path);
             });
     }
 

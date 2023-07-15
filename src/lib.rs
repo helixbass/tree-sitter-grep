@@ -285,7 +285,7 @@ pub fn run_print(args: Args) -> Result<RunStatus, Error> {
 
 pub fn run_with_callback(
     args: Args,
-    callback: impl Fn(Node, &[u8]) + Sync,
+    callback: impl Fn(Node, &[u8], &Path) + Sync,
 ) -> Result<RunStatus, Error> {
     run_for_context(
         args,
@@ -297,10 +297,14 @@ pub fn run_with_callback(
          matched: &AtomicBool| {
             get_searcher(args)
                 .borrow_mut()
-                .search_path_callback(query_context, path, |node: Node, file_contents: &[u8]| {
-                    callback(node, file_contents);
-                    matched.store(true, Ordering::SeqCst);
-                })
+                .search_path_callback::<_, io::Error>(
+                    query_context,
+                    path,
+                    |node: Node, file_contents: &[u8], path: &Path| {
+                        callback(node, file_contents, path);
+                        matched.store(true, Ordering::SeqCst);
+                    },
+                )
                 .unwrap();
         },
     )
