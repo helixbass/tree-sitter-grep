@@ -99,8 +99,6 @@ pub enum NonFatalError {
         path: PathBuf,
         languages: Vec<SupportedLanguage>,
     },
-    #[error("The provided query could not be parsed for the language of file {path:?}")]
-    QueryNotParseableForFile { path: PathBuf },
     #[error("No files were searched")]
     NothingSearched,
     #[error("{error}")]
@@ -238,13 +236,20 @@ impl From<NonFatalError> for SingleFileSearchError {
     }
 }
 
-impl<TSuccess> From<Error> for Result<TSuccess, SingleFileSearchError> {
+enum SingleFileSearchNonFailure {
+    QueryNotParseableForFile,
+    RanQuery,
+}
+
+type SingleFileSearchResult = Result<SingleFileSearchNonFailure, SingleFileSearchError>;
+
+impl From<Error> for SingleFileSearchResult {
     fn from(value: Error) -> Self {
         Err(value.into())
     }
 }
 
-impl<TSuccess> From<NonFatalError> for Result<TSuccess, SingleFileSearchError> {
+impl From<NonFatalError> for SingleFileSearchResult {
     fn from(value: NonFatalError) -> Self {
         Err(value.into())
     }
@@ -274,7 +279,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
     for_each_project_file(
         &args,
         non_fatal_errors.clone(),
-        |project_file_dir_entry, matched_languages| -> Result<(), SingleFileSearchError> {
+        |project_file_dir_entry, matched_languages| {
             searched.store(true, Ordering::SeqCst);
             let language = match args.language {
                 Some(specified_language) => {
@@ -306,10 +311,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
                             .collect::<Vec<_>>();
                         match successfully_parsed_query_languages.len() {
                             0 => {
-                                return NonFatalError::QueryNotParseableForFile {
-                                    path: project_file_dir_entry.path().to_owned(),
-                                }
-                                .into();
+                                return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile);
                             }
                             1 => successfully_parsed_query_languages[0],
                             _ => {
@@ -323,11 +325,11 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
                     }
                 },
             };
-            let query = cached_queries
-                .get_and_cache_query_for_language(&query_text, language)
-                .ok_or_else(|| NonFatalError::QueryNotParseableForFile {
-                    path: project_file_dir_entry.path().to_owned(),
-                })?;
+            let query = match cached_queries.get_and_cache_query_for_language(&query_text, language)
+            {
+                Some(query) => query,
+                None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
+            };
             let capture_index = capture_index
                 .get_or_init(&query, args.capture_name.as_deref())
                 .map_err(Error::from)?;
@@ -350,22 +352,14 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
             }
             buffer_writer.print(printer.get_mut()).unwrap();
 
-            Ok(())
+            Ok(SingleFileSearchNonFailure::RanQuery)
         },
     )?;
 
     let mut non_fatal_errors = Arc::into_inner(non_fatal_errors)
         .unwrap()
         .into_inner()
-        .unwrap()
-        .into_iter()
-        .filter(|non_fatal_error| {
-            !matches!(
-                non_fatal_error,
-                NonFatalError::QueryNotParseableForFile { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+        .unwrap();
     if non_fatal_errors.is_empty() {
         if !searched.load(Ordering::SeqCst) {
             non_fatal_errors.push(NonFatalError::NothingSearched);
@@ -383,7 +377,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
 fn for_each_project_file(
     args: &Args,
     non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
-    callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> Result<(), SingleFileSearchError> + Sync,
+    callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> SingleFileSearchResult + Sync,
 ) -> Result<(), Error> {
     let fatal_error: Mutex<Option<Error>> = Default::default();
     args.get_project_file_parallel_iterator(non_fatal_errors.clone())
