@@ -78,7 +78,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Error)]
-pub enum NonFatalSearchError {
+pub enum NonFatalError {
     #[error("File {path:?} is not recognized as a {specified_language:?} file")]
     ExplicitPathArgumentNotOfSpecifiedType {
         path: PathBuf,
@@ -218,11 +218,11 @@ impl CachedQueries {
 
 pub struct RunStatus {
     pub matched: bool,
-    pub non_fatal_errors: Vec<NonFatalSearchError>,
+    pub non_fatal_errors: Vec<NonFatalError>,
 }
 
 enum SingleFileSearchError {
-    NonFatalSearchError(NonFatalSearchError),
+    NonFatalSearchError(NonFatalError),
     FatalError(Error),
 }
 
@@ -232,8 +232,8 @@ impl From<Error> for SingleFileSearchError {
     }
 }
 
-impl From<NonFatalSearchError> for SingleFileSearchError {
-    fn from(value: NonFatalSearchError) -> Self {
+impl From<NonFatalError> for SingleFileSearchError {
+    fn from(value: NonFatalError) -> Self {
         Self::NonFatalSearchError(value)
     }
 }
@@ -244,8 +244,8 @@ impl<TSuccess> From<Error> for Result<TSuccess, SingleFileSearchError> {
     }
 }
 
-impl<TSuccess> From<NonFatalSearchError> for Result<TSuccess, SingleFileSearchError> {
-    fn from(value: NonFatalSearchError) -> Self {
+impl<TSuccess> From<NonFatalError> for Result<TSuccess, SingleFileSearchError> {
+    fn from(value: NonFatalError) -> Self {
         Err(value.into())
     }
 }
@@ -269,7 +269,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
     let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
-    let non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>> = Default::default();
+    let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();
 
     for_each_project_file(
         &args,
@@ -279,7 +279,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
             let language = match args.language {
                 Some(specified_language) => {
                     if !matched_languages.contains(&specified_language) {
-                        return NonFatalSearchError::ExplicitPathArgumentNotOfSpecifiedType {
+                        return NonFatalError::ExplicitPathArgumentNotOfSpecifiedType {
                             path: project_file_dir_entry.path().to_owned(),
                             specified_language,
                         }
@@ -289,7 +289,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
                 }
                 None => match matched_languages.len() {
                     0 => {
-                        return NonFatalSearchError::ExplicitPathArgumentNotOfKnownType {
+                        return NonFatalError::ExplicitPathArgumentNotOfKnownType {
                             path: project_file_dir_entry.path().to_owned(),
                         }
                         .into();
@@ -306,14 +306,14 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
                             .collect::<Vec<_>>();
                         match successfully_parsed_query_languages.len() {
                             0 => {
-                                return NonFatalSearchError::QueryNotParseableForFile {
+                                return NonFatalError::QueryNotParseableForFile {
                                     path: project_file_dir_entry.path().to_owned(),
                                 }
                                 .into();
                             }
                             1 => successfully_parsed_query_languages[0],
                             _ => {
-                                return NonFatalSearchError::AmbiguousLanguageForFile {
+                                return NonFatalError::AmbiguousLanguageForFile {
                                     path: project_file_dir_entry.path().to_owned(),
                                     languages: successfully_parsed_query_languages,
                                 }
@@ -325,7 +325,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
             };
             let query = cached_queries
                 .get_and_cache_query_for_language(&query_text, language)
-                .ok_or_else(|| NonFatalSearchError::QueryNotParseableForFile {
+                .ok_or_else(|| NonFatalError::QueryNotParseableForFile {
                     path: project_file_dir_entry.path().to_owned(),
                 })?;
             let capture_index = capture_index
@@ -362,13 +362,13 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
         .filter(|non_fatal_error| {
             !matches!(
                 non_fatal_error,
-                NonFatalSearchError::QueryNotParseableForFile { .. }
+                NonFatalError::QueryNotParseableForFile { .. }
             )
         })
         .collect::<Vec<_>>();
     if non_fatal_errors.is_empty() {
         if !searched.load(Ordering::SeqCst) {
-            non_fatal_errors.push(NonFatalSearchError::NothingSearched);
+            non_fatal_errors.push(NonFatalError::NothingSearched);
         } else {
             cached_queries.error_if_no_successful_query_parsing()?;
         }
@@ -382,7 +382,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
 
 fn for_each_project_file(
     args: &Args,
-    non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>>,
+    non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> Result<(), SingleFileSearchError> + Sync,
 ) -> Result<(), Error> {
     let fatal_error: Mutex<Option<Error>> = Default::default();
