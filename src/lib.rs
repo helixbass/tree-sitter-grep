@@ -1,7 +1,7 @@
 #![allow(clippy::into_iter_on_ref)]
 
 use std::{
-    fmt, fs, io,
+    fmt, io,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -10,7 +10,6 @@ use std::{
 };
 
 use ignore::DirEntry;
-use plugin::get_loaded_filter;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
@@ -152,8 +151,6 @@ impl CaptureIndex {
     }
 }
 
-const ALL_NODES_QUERY: &str = "(_) @node";
-
 fn join_with_or<TItem: fmt::Display>(list: &[TItem]) -> String {
     let mut ret: String = Default::default();
     for (index, item) in list.iter().enumerate() {
@@ -250,31 +247,60 @@ impl<TSuccess> From<NonFatalSearchError> for Result<TSuccess, SingleFileSearchEr
     }
 }
 
+pub struct OutputContext {
+    pub buffer_writer: BufferWriter,
+}
+
+impl OutputContext {
+    pub fn new(buffer_writer: BufferWriter) -> Self {
+        Self { buffer_writer }
+    }
+}
+
 pub fn run(args: Args) -> Result<RunStatus, Error> {
-    let query_text = match (args.path_to_query_file.as_ref(), args.query_text.as_ref()) {
-        (Some(path_to_query_file), None) => {
-            fs::read_to_string(path_to_query_file).map_err(|source| Error::QueryFileReadError {
-                source,
-                path_to_query_file: path_to_query_file.clone(),
-            })?
-        }
-        (None, Some(query_text)) => query_text.clone(),
-        (None, None) => ALL_NODES_QUERY.to_owned(),
-        _ => unreachable!(),
-    };
-    let filter =
-        get_loaded_filter(args.filter.as_deref(), args.filter_arg.as_deref())?.map(Arc::new);
+    run_for_context(
+        args,
+        || OutputContext::new(BufferWriter::stdout(ColorChoice::Never)),
+        |context: &OutputContext,
+         args: &Args,
+         path: &Path,
+         query_context: QueryContext,
+         matched: &AtomicBool| {
+            let printer = get_printer(&context.buffer_writer, args);
+            let mut printer = printer.borrow_mut();
+
+            printer.get_mut().clear();
+            let mut sink = printer.sink_with_path(path);
+            get_searcher(args)
+                .borrow_mut()
+                .search_path(query_context, path, &mut sink)
+                .unwrap();
+            if sink.has_match() {
+                matched.store(true, Ordering::SeqCst);
+            }
+            context.buffer_writer.print(printer.get_mut()).unwrap();
+        },
+    )
+}
+
+fn run_for_context<TContext: Sync>(
+    args: Args,
+    initialize_context: impl FnOnce() -> TContext,
+    search_file: impl Fn(&TContext, &Args, &Path, QueryContext, &AtomicBool) + Sync,
+) -> Result<RunStatus, Error> {
+    let query_text = args.get_loaded_query_text()?;
+    let filter = args.get_loaded_filter()?;
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
-    let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
     let non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>> = Default::default();
+    let context = initialize_context();
 
     for_each_project_file(
         &args,
         non_fatal_errors.clone(),
-        |project_file_dir_entry, matched_languages| -> Result<(), SingleFileSearchError> {
+        |project_file_dir_entry, matched_languages| {
             searched.store(true, Ordering::SeqCst);
             let language = match args.language {
                 Some(specified_language) => {
@@ -331,24 +357,13 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
             let capture_index = capture_index
                 .get_or_init(&query, args.capture_name.as_deref())
                 .map_err(Error::from)?;
-            let printer = get_printer(&buffer_writer, &args);
-            let mut printer = printer.borrow_mut();
             let path =
                 format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
 
             let query_context =
                 QueryContext::new(query, capture_index, language.language(), filter.clone());
 
-            printer.get_mut().clear();
-            let mut sink = printer.sink_with_path(path);
-            get_searcher(&args)
-                .borrow_mut()
-                .search_path(query_context, path, &mut sink)
-                .unwrap();
-            if sink.has_match() {
-                matched.store(true, Ordering::SeqCst);
-            }
-            buffer_writer.print(printer.get_mut()).unwrap();
+            search_file(&context, &args, path, query_context, &matched);
 
             Ok(())
         },
