@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, OnceLock,
+        Arc, Mutex, OnceLock, RwLock,
     },
 };
 
@@ -379,10 +379,10 @@ fn for_each_project_file(
     non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> SingleFileSearchResult + Sync,
 ) -> Result<(), Error> {
-    let fatal_error: Mutex<Option<Error>> = Default::default();
+    let fatal_error: RwLock<Option<Error>> = Default::default();
     args.get_project_file_parallel_iterator(non_fatal_errors.clone())
         .for_each(|(project_file_dir_entry, matched_languages)| {
-            if fatal_error.lock().unwrap().is_some() {
+            if fatal_error.read().unwrap().is_some() {
                 return;
             }
 
@@ -392,7 +392,7 @@ fn for_each_project_file(
                         non_fatal_errors.lock().unwrap().push(error);
                     }
                     SingleFileSearchError::FatalError(error) => {
-                        *fatal_error.lock().unwrap() = Some(error);
+                        *fatal_error.write().unwrap() = Some(error);
                     }
                 }
             }
