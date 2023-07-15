@@ -260,7 +260,7 @@ impl OutputContext {
 pub fn run(args: Args) -> Result<RunStatus, Error> {
     run_for_context(
         args,
-        || OutputContext::new(BufferWriter::stdout(ColorChoice::Never)),
+        OutputContext::new(BufferWriter::stdout(ColorChoice::Never)),
         |context: &OutputContext,
          args: &Args,
          path: &Path,
@@ -285,7 +285,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
 
 fn run_for_context<TContext: Sync>(
     args: Args,
-    initialize_context: impl FnOnce() -> TContext,
+    context: TContext,
     search_file: impl Fn(&TContext, &Args, &Path, QueryContext, &AtomicBool) + Sync,
 ) -> Result<RunStatus, Error> {
     let query_text = args.get_loaded_query_text()?;
@@ -295,7 +295,6 @@ fn run_for_context<TContext: Sync>(
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
     let non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>> = Default::default();
-    let context = initialize_context();
 
     for_each_project_file(
         &args,
