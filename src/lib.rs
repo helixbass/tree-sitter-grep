@@ -232,6 +232,12 @@ impl From<NonFatalError> for SingleFileSearchError {
     }
 }
 
+impl From<CaptureIndexError> for SingleFileSearchError {
+    fn from(value: CaptureIndexError) -> Self {
+        Self::FatalError(value.into())
+    }
+}
+
 enum SingleFileSearchNonFailure {
     QueryNotParseableForFile,
     RanQuery,
@@ -326,9 +332,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
                 Some(query) => query,
                 None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
             };
-            let capture_index = capture_index
-                .get_or_init(&query, args.capture_name.as_deref())
-                .map_err(Error::from)?;
+            let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref())?;
             let printer = get_printer(&buffer_writer, &args);
             let mut printer = printer.borrow_mut();
             let path =
