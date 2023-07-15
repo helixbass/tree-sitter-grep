@@ -77,7 +77,7 @@ pub enum Error {
     FilterPluginCouldntParseArgument { filter_arg: String },
 }
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug, Error)]
 pub enum NonFatalError {
     #[error("File {path:?} is not recognized as a {specified_language:?} file")]
     ExplicitPathArgumentNotOfSpecifiedType {
@@ -356,10 +356,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
         },
     )?;
 
-    let mut non_fatal_errors = Arc::into_inner(non_fatal_errors)
-        .unwrap()
-        .into_inner()
-        .unwrap();
+    let mut non_fatal_errors = non_fatal_errors.lock().unwrap().clone();
     if non_fatal_errors.is_empty() {
         if !searched.load(Ordering::SeqCst) {
             non_fatal_errors.push(NonFatalError::NothingSearched);
