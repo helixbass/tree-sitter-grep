@@ -13,7 +13,7 @@ use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
-use tree_sitter::{Query, QueryError};
+use tree_sitter::{Node, Query, QueryError};
 
 mod args;
 mod language;
@@ -257,7 +257,7 @@ impl OutputContext {
     }
 }
 
-pub fn run(args: Args) -> Result<RunStatus, Error> {
+pub fn run_print(args: Args) -> Result<RunStatus, Error> {
     run_for_context(
         args,
         OutputContext::new(BufferWriter::stdout(ColorChoice::Never)),
@@ -279,6 +279,29 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
                 matched.store(true, Ordering::SeqCst);
             }
             context.buffer_writer.print(printer.get_mut()).unwrap();
+        },
+    )
+}
+
+pub fn run_with_callback(
+    args: Args,
+    callback: impl Fn(Node, &[u8]) + Sync,
+) -> Result<RunStatus, Error> {
+    run_for_context(
+        args,
+        (),
+        |_context: &(),
+         args: &Args,
+         path: &Path,
+         query_context: QueryContext,
+         matched: &AtomicBool| {
+            get_searcher(args)
+                .borrow_mut()
+                .search_path_callback(query_context, path, |node: Node, file_contents: &[u8]| {
+                    callback(node, file_contents);
+                    matched.store(true, Ordering::SeqCst);
+                })
+                .unwrap();
         },
     )
 }

@@ -1,11 +1,11 @@
 use std::process;
 
 use clap::Parser;
-use tree_sitter_grep::{run, Args, RunStatus};
+use tree_sitter_grep::{run_print, Args, RunStatus};
 
 pub fn main() {
     let args = Args::parse();
-    match run(args) {
+    match run_print(args) {
         Ok(RunStatus {
             non_fatal_errors,
             matched,
