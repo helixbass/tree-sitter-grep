@@ -401,16 +401,6 @@ fn for_each_project_file(
     }
 }
 
-#[macro_export]
-macro_rules! only_run_once {
-    ($block:block) => {
-        static ONCE_LOCK: std::sync::OnceLock<()> = OnceLock::new();
-        ONCE_LOCK.get_or_init(|| {
-            $block;
-        });
-    };
-}
-
 fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {
     if is_using_default_paths && path.starts_with("./") {
         path.strip_prefix("./").unwrap()
