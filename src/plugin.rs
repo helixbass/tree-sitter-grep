@@ -1,20 +1,19 @@
 use std::{
     ffi::{CString, OsStr},
     ptr,
-    sync::OnceLock,
 };
 
 use libloading::Library;
 use tree_sitter::Node;
 
-use crate::fail;
+use crate::Error;
 
 #[cfg(unix)]
 type RawSymbol<TExportedSymbol> = libloading::os::unix::Symbol<TExportedSymbol>;
 #[cfg(windows)]
 type RawSymbol<TExportedSymbol> = libloading::os::windows::Symbol<TExportedSymbol>;
 
-pub(crate) struct Filterer {
+pub struct Filterer {
     filterer: RawSymbol<unsafe extern "C" fn(*const Node) -> bool>,
     _library: Library,
 }
@@ -32,7 +31,10 @@ pub enum PluginInitializeReturn {
     NotParseable,
 }
 
-fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Filterer {
+fn load_plugin(
+    library_path: impl AsRef<OsStr>,
+    filter_arg: Option<&str>,
+) -> Result<Filterer, Error> {
     let library =
         unsafe { Library::new(library_path).expect("Couldn't load filter dynamic library") };
 
@@ -41,25 +43,24 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
             b"initialize\0",
         )
     } {
-        let filter_arg = filter_arg.map(|filter_arg| {
+        let filter_arg_as_c_string = filter_arg.map(|filter_arg| {
             CString::new(filter_arg).expect("Couldn't convert provided filter arg to CString")
         });
         let did_initialize = unsafe {
             initialize(
-                filter_arg
+                filter_arg_as_c_string
                     .as_ref()
                     .map_or_else(ptr::null, |filter_arg| filter_arg.as_ptr()),
             )
         };
         match did_initialize {
             PluginInitializeReturn::MissingArgument => {
-                fail("plugin expected '--filter-arg <ARGUMENT>'");
+                return Err(Error::FilterPluginExpectedArgument);
             }
             PluginInitializeReturn::NotParseable => {
-                fail(&format!(
-                    "plugin couldn't parse argument {:?}",
-                    filter_arg.unwrap()
-                ));
+                return Err(Error::FilterPluginCouldntParseArgument {
+                    filter_arg: filter_arg.unwrap().to_owned(),
+                });
             }
             _ => (),
         }
@@ -72,18 +73,17 @@ fn load_plugin(library_path: impl AsRef<OsStr>, filter_arg: Option<&str>) -> Fil
             .into_raw()
     };
 
-    Filterer {
+    Ok(Filterer {
         filterer,
         _library: library,
-    }
+    })
 }
 
 pub(crate) fn get_loaded_filter(
     filter_library_path: Option<&str>,
     filter_arg: Option<&str>,
-) -> Option<&'static Filterer> {
-    filter_library_path.map(|filter_library_path| {
-        static LOADED_FILTERER: OnceLock<Filterer> = OnceLock::new();
-        LOADED_FILTERER.get_or_init(|| load_plugin(filter_library_path, filter_arg))
-    })
+) -> Result<Option<Filterer>, Error> {
+    filter_library_path
+        .map(|filter_library_path| load_plugin(filter_library_path, filter_arg))
+        .transpose()
 }
