@@ -1,5 +1,5 @@
 use std::{
-    sync::{mpsc, mpsc::Receiver},
+    sync::{mpsc, mpsc::Receiver, Arc, Mutex},
     thread,
     thread::JoinHandle,
 };
@@ -11,17 +11,18 @@ use ignore::{
 use rayon::{iter::IterBridge, prelude::*};
 
 use crate::{
-    err_message,
     language::{
         SupportedLanguage, ALL_SUPPORTED_LANGUAGES,
         ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT,
     },
+    NonFatalError,
 };
 
 pub(crate) fn into_parallel_iterator(
     walk_parallel: WalkParallel,
+    non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
 ) -> IterBridge<WalkParallelIterator> {
-    WalkParallelIterator::new(walk_parallel).par_bridge()
+    WalkParallelIterator::new(walk_parallel, non_fatal_errors).par_bridge()
 }
 
 pub(crate) struct WalkParallelIterator {
@@ -30,17 +31,21 @@ pub(crate) struct WalkParallelIterator {
 }
 
 impl WalkParallelIterator {
-    pub fn new(walk_parallel: WalkParallel) -> Self {
+    pub fn new(
+        walk_parallel: WalkParallel,
+        non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel::<(DirEntry, Vec<SupportedLanguage>)>();
         let handle = thread::spawn(move || {
             let ignore = &walk_parallel.ignore();
             walk_parallel.run(move || {
                 Box::new({
                     let sender = sender.clone();
+                    let non_fatal_errors = non_fatal_errors.clone();
                     move |entry_and_match_metadata| {
                         let (entry, match_metadata) = match entry_and_match_metadata {
                             Err(err) => {
-                                err_message!("{err}");
+                                non_fatal_errors.lock().unwrap().push(err.into());
                                 return WalkState::Continue;
                             }
                             Ok(entry_and_match_metadata) => entry_and_match_metadata,

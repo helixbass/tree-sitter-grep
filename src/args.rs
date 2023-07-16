@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use clap::{ArgGroup, Parser};
 use ignore::{types::Types, WalkBuilder, WalkParallel};
@@ -13,6 +16,7 @@ use crate::{
     },
     searcher::{Searcher, SearcherBuilder},
     use_printer::Printer,
+    NonFatalError,
 };
 
 #[derive(Parser)]
@@ -180,7 +184,10 @@ impl Args {
         builder.build_parallel()
     }
 
-    pub(crate) fn get_project_file_parallel_iterator(&self) -> IterBridge<WalkParallelIterator> {
-        into_parallel_iterator(self.get_project_file_walker())
+    pub(crate) fn get_project_file_parallel_iterator(
+        &self,
+        non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
+    ) -> IterBridge<WalkParallelIterator> {
+        into_parallel_iterator(self.get_project_file_walker(), non_fatal_errors)
     }
 }
