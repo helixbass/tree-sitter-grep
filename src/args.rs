@@ -371,7 +371,11 @@ impl Args {
     }
 
     fn color_choice(&self) -> ColorChoice {
-        match self.color.unwrap_or(ColorChoiceArg::Auto) {
+        match self.color.unwrap_or(if self.vimgrep {
+            ColorChoiceArg::Never
+        } else {
+            ColorChoiceArg::Auto
+        }) {
             ColorChoiceArg::Always => ColorChoice::Always,
             ColorChoiceArg::Ansi => ColorChoice::AlwaysAnsi,
             ColorChoiceArg::Auto => {
