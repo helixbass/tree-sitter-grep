@@ -1,5 +1,5 @@
 #![allow(clippy::into_iter_on_ref, clippy::collapsible_if, dead_code)]
-use std::{borrow::Cow, env, path::PathBuf, process::Command};
+use std::{borrow::Cow, env, iter, path::PathBuf, process::Command};
 
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
@@ -146,7 +146,7 @@ fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
 }
 
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
-    regex!(r#"^[^:]+[:-]\d+[:-]"#)
+    regex!(r#"^[a-zA-Z_\-]+\.(?:rs)"#)
         .replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
 
