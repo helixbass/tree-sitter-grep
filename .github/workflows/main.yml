@@ -24,7 +24,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
       - run: cargo clippy --all-targets --tests -- -D warnings
       - run: cargo test
+        if: matrix.os == 'ubuntu-latest'
         env:
           TERM: linux
+      - run: cargo test
+        if: matrix.os != 'ubuntu-latest'
       - run: RUSTDOCFLAGS='--deny warnings' cargo doc --no-deps
         if: matrix.os == 'ubuntu-latest'
