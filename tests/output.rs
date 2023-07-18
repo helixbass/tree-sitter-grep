@@ -11,15 +11,15 @@ fn test_query_inline() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query '(function_item) @function_item' --language rust
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -30,15 +30,15 @@ fn test_query_inline_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' --language rust
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -63,15 +63,15 @@ fn test_query_file() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query-file ./function-item.scm --language rust
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/stop.rs:fn stop_it() {}
        "#,
     );
 }
@@ -82,15 +82,15 @@ fn test_query_file_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -Q ./function-item.scm --language rust
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/stop.rs:fn stop_it() {}
        "#,
     );
 }
@@ -101,13 +101,13 @@ fn test_specify_single_file() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query '(function_item) @function_item' --language rust src/lib.rs
-            3:pub fn add(left: usize, right: usize) -> usize {
-            4:    left + right
-            5:}
-            12:    fn it_works() {
-            13:        let result = add(2, 2);
-            14:        assert_eq!(result, 4);
-            15:    }
+            pub fn add(left: usize, right: usize) -> usize {
+                left + right
+            }
+                fn it_works() {
+                    let result = add(2, 2);
+                    assert_eq!(result, 4);
+                }
         "#,
     );
 }
@@ -118,13 +118,13 @@ fn test_specify_single_file_preserves_leading_dot_slash() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query '(function_item) @function_item' --language rust --with-filename ./src/lib.rs
-            ./src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            ./src/lib.rs:4:    left + right
-            ./src/lib.rs:5:}
-            ./src/lib.rs:12:    fn it_works() {
-            ./src/lib.rs:13:        let result = add(2, 2);
-            ./src/lib.rs:14:        assert_eq!(result, 4);
-            ./src/lib.rs:15:    }
+            ./src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            ./src/lib.rs:    left + right
+            ./src/lib.rs:}
+            ./src/lib.rs:    fn it_works() {
+            ./src/lib.rs:        let result = add(2, 2);
+            ./src/lib.rs:        assert_eq!(result, 4);
+            ./src/lib.rs:    }
         "#,
     );
 }
@@ -135,14 +135,14 @@ fn test_specify_multiple_files() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query '(function_item) @function_item' --language rust src/lib.rs ./src/helpers.rs
-            ./src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
+            ./src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
         "#,
     );
 }
@@ -218,15 +218,15 @@ fn test_auto_language_single_known_language_encountered() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item'
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -237,8 +237,8 @@ fn test_auto_language_multiple_parseable_languages() {
         "mixed_project",
         r#"
             $ tree-sitter-grep -q '(arrow_function) @arrow_function'
-            javascript_src/index.js:1:const js_foo = () => {}
-            typescript_src/index.tsx:1:const foo = () => {}
+            javascript_src/index.js:const js_foo = () => {}
+            typescript_src/index.tsx:const foo = () => {}
         "#,
     );
 }
@@ -249,7 +249,7 @@ fn test_auto_language_single_parseable_languages() {
         "mixed_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item'
-            rust_src/lib.rs:1:fn foo() {}
+            rust_src/lib.rs:fn foo() {}
         "#,
     );
 }
@@ -260,15 +260,15 @@ fn test_capture_name() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item name: (identifier) @name) @function_item' --language rust --capture function_item
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -279,9 +279,9 @@ fn test_predicate() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item name: (identifier) @name (#eq? @name "add")) @function_item' --language rust --capture function_item
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
         "#,
     );
 }
@@ -317,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset|--colors <COLORS>|--color <WHEN>|--pretty|--heading|--no-heading|--with-filename|--no-filename>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset|--colors <COLORS>|--color <WHEN>|--pretty|--heading|--no-heading|--with-filename|--no-filename|--line-number|--no-line-number|--column|--no-column>
 
             For more information, try '--help'.
         "#,
@@ -332,11 +332,11 @@ fn test_filter_plugin() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_10.so
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -349,8 +349,8 @@ fn test_filter_plugin_with_argument() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' --language rust --filter ../../../target/debug/examples/libfilter_before_line_number.so --filter-arg 2
-            src/helpers.rs:1:pub fn helper() {}
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -389,11 +389,11 @@ fn test_filter_plugin_no_query() {
         "rust_project",
         r#"
             $ tree-sitter-grep --language rust --filter ../../../target/debug/examples/libfilter_function_items_before_line_10.so
-            src/helpers.rs:1:pub fn helper() {}
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/stop.rs:1:fn stop_it() {}
+            src/helpers.rs:pub fn helper() {}
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/stop.rs:fn stop_it() {}
         "#,
     );
 }
@@ -586,6 +586,24 @@ fn test_help_option() {
 
                       This flag overrides --with-filename.
 
+              -n, --line-number
+                      Show line numbers (1-based).
+
+                      This is enabled by default when searching in a terminal.
+
+              -N, --no-line-number
+                      Suppress line numbers.
+
+                      This is enabled by default when not searching in a terminal.
+
+                  --column
+                      Show column numbers (1-based).
+
+                      This only shows the column numbers for the first match on each line. This does not try to
+                      account for Unicode. One byte is equal to one column. This implies --line-number.
+
+                      This flag can be disabled with --no-column.
+
               -h, --help
                       Print help (see a summary with '-h')
         "#,
@@ -647,6 +665,12 @@ fn test_help_short_option() {
                       Display the file path for matches
               -I, --no-filename
                       Never print the file path with the matched lines
+              -n, --line-number
+                      Show line numbers (1-based)
+              -N, --no-line-number
+                      Suppress line numbers
+                  --column
+                      Show column numbers (1-based)
               -h, --help
                       Print help (see more with '--help')
         "#,
@@ -693,9 +717,9 @@ fn test_macro_contents() {
         "match_inside_macro",
         r#"
             $ tree-sitter-grep -q '(call_expression) @c' -l rust
-            foo.rs:4:        self.factory
-            foo.rs:5:            .create_parameter_declaration("whee", Option::<Gc<NodeArray>>::None)
-            foo.rs:6:            .wrap(),
+            foo.rs:        self.factory
+            foo.rs:            .create_parameter_declaration("whee", Option::<Gc<NodeArray>>::None)
+            foo.rs:            .wrap(),
         "#,
     );
 }
@@ -718,11 +742,11 @@ fn test_overlapping_matches() {
         "rust_overlapping",
         r#"
             $ tree-sitter-grep -q '(closure_expression) @closure_expression' --language rust
-            src/lib.rs:2:    let f = || {
-            src/lib.rs:3:        || {
-            src/lib.rs:4:            println!("whee");
-            src/lib.rs:5:        }
-            src/lib.rs:6:    };
+            src/lib.rs:    let f = || {
+            src/lib.rs:        || {
+            src/lib.rs:            println!("whee");
+            src/lib.rs:        }
+            src/lib.rs:    };
         "#,
     );
 }
@@ -745,22 +769,22 @@ fn test_after_context() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --after-context 2
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
-            src/lib.rs-7-#[cfg(test)]
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
+            src/lib.rs-#[cfg(test)]
             --
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
-            src/lib.rs-17-
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
+            src/lib.rs-
         "#,
     );
 }
@@ -771,10 +795,10 @@ fn test_after_context_matches_overlap_context_lines() {
         "rust_overlapping",
         r#"
             $ tree-sitter-grep -q '(call_expression function: (identifier) @function_name (#match? @function_name "^h"))' -l rust -A 2
-            src/lib.rs:10:    hello();
-            src/lib.rs:11:    hoo();
-            src/lib.rs-12-    raa();
-            src/lib.rs-13-    roo();
+            src/lib.rs:    hello();
+            src/lib.rs:    hoo();
+            src/lib.rs-    raa();
+            src/lib.rs-    roo();
         "#,
     );
 }
@@ -785,13 +809,13 @@ fn test_after_context_overlapping_matches() {
         "rust_overlapping",
         r#"
             $ tree-sitter-grep -q '(closure_expression) @c' -l rust --after-context 2
-            src/lib.rs:2:    let f = || {
-            src/lib.rs:3:        || {
-            src/lib.rs:4:            println!("whee");
-            src/lib.rs:5:        }
-            src/lib.rs:6:    };
-            src/lib.rs-7-}
-            src/lib.rs-8-
+            src/lib.rs:    let f = || {
+            src/lib.rs:        || {
+            src/lib.rs:            println!("whee");
+            src/lib.rs:        }
+            src/lib.rs:    };
+            src/lib.rs-}
+            src/lib.rs-
         "#,
     );
 }
@@ -816,22 +840,22 @@ fn test_after_context_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust -A 2
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
-            src/lib.rs-7-#[cfg(test)]
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
+            src/lib.rs-#[cfg(test)]
             --
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
-            src/lib.rs-17-
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
+            src/lib.rs-
         "#,
     );
 }
@@ -842,23 +866,23 @@ fn test_before_context() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --before-context 3
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
             --
-            src/lib.rs-9-    use super::*;
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
+            src/lib.rs-    use super::*;
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
         "#,
     );
 }
@@ -869,23 +893,23 @@ fn test_before_context_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust -B 3
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
             --
-            src/lib.rs-9-    use super::*;
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
+            src/lib.rs-    use super::*;
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
         "#,
     );
 }
@@ -896,10 +920,10 @@ fn test_before_context_matches_overlap_context_lines() {
         "rust_overlapping",
         r#"
             $ tree-sitter-grep -q '(call_expression function: (identifier) @function_name (#match? @function_name "^h"))' -l rust -B 2
-            src/lib.rs-8-
-            src/lib.rs-9-fn something_else() {
-            src/lib.rs:10:    hello();
-            src/lib.rs:11:    hoo();
+            src/lib.rs-
+            src/lib.rs-fn something_else() {
+            src/lib.rs:    hello();
+            src/lib.rs:    hoo();
         "#,
     );
 }
@@ -910,13 +934,13 @@ fn test_before_context_overlapping_matches() {
         "rust_overlapping_with_preceding_lines",
         r#"
             $ tree-sitter-grep -q '(closure_expression) @c' -l rust --before-context 2
-            src/lib.rs-5-        .i_promise()
-            src/lib.rs-6-        .but_it_has_to_be_longer();
-            src/lib.rs:7:    let f = || {
-            src/lib.rs:8:        || {
-            src/lib.rs:9:            println!("whee");
-            src/lib.rs:10:        }
-            src/lib.rs:11:    };
+            src/lib.rs-        .i_promise()
+            src/lib.rs-        .but_it_has_to_be_longer();
+            src/lib.rs:    let f = || {
+            src/lib.rs:        || {
+            src/lib.rs:            println!("whee");
+            src/lib.rs:        }
+            src/lib.rs:    };
         "#,
     );
 }
@@ -941,26 +965,26 @@ fn test_context() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --context 2
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
-            src/lib.rs-7-#[cfg(test)]
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
+            src/lib.rs-#[cfg(test)]
             --
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
-            src/lib.rs-17-
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
+            src/lib.rs-
         "#,
     );
 }
@@ -971,28 +995,28 @@ fn test_context_adjacent_after_and_before_context_lines() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --context 3
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
-            src/lib.rs-7-#[cfg(test)]
-            src/lib.rs-8-mod tests {
-            src/lib.rs-9-    use super::*;
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
-            src/lib.rs-17-
-            src/lib.rs-18-mod stop;
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
+            src/lib.rs-#[cfg(test)]
+            src/lib.rs-mod tests {
+            src/lib.rs-    use super::*;
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
+            src/lib.rs-
+            src/lib.rs-mod stop;
         "#,
     );
 }
@@ -1003,28 +1027,28 @@ fn test_context_overlapping_after_and_before_context_lines() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --context 4
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
-            src/lib.rs-7-#[cfg(test)]
-            src/lib.rs-8-mod tests {
-            src/lib.rs-9-    use super::*;
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
-            src/lib.rs-17-
-            src/lib.rs-18-mod stop;
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
+            src/lib.rs-#[cfg(test)]
+            src/lib.rs-mod tests {
+            src/lib.rs-    use super::*;
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
+            src/lib.rs-
+            src/lib.rs-mod stop;
         "#,
     );
 }
@@ -1035,26 +1059,26 @@ fn test_context_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust -C 2
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
-            src/lib.rs-7-#[cfg(test)]
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
+            src/lib.rs-#[cfg(test)]
             --
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
-            src/lib.rs-17-
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
+            src/lib.rs-
         "#,
     );
 }
@@ -1065,24 +1089,24 @@ fn test_before_and_after_context() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --before-context 2 --after-context 1
-            src/stop.rs:1:fn stop_it() {}
+            src/stop.rs:fn stop_it() {}
             --
-            src/helpers.rs:1:pub fn helper() {}
+            src/helpers.rs:pub fn helper() {}
             --
-            src/lib.rs-1-mod helpers;
-            src/lib.rs-2-
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs-6-
+            src/lib.rs-mod helpers;
+            src/lib.rs-
+            src/lib.rs:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:    left + right
+            src/lib.rs:}
+            src/lib.rs-
             --
-            src/lib.rs-10-
-            src/lib.rs-11-    #[test]
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
-            src/lib.rs-16-}
+            src/lib.rs-
+            src/lib.rs-    #[test]
+            src/lib.rs:    fn it_works() {
+            src/lib.rs:        let result = add(2, 2);
+            src/lib.rs:        assert_eq!(result, 4);
+            src/lib.rs:    }
+            src/lib.rs-}
         "#,
     );
 }
@@ -1203,8 +1227,8 @@ fn test_only_matching() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(parameter) @c' --language rust --only-matching
-            src/lib.rs:3:left: usize
-            src/lib.rs:3:right: usize
+            src/lib.rs:left: usize
+            src/lib.rs:right: usize
         "#,
     );
 }
@@ -1215,8 +1239,8 @@ fn test_only_matching_short_option() {
         "rust_project",
         r#"
             $ tree-sitter-grep -q '(parameter) @c' --language rust -o
-            src/lib.rs:3:left: usize
-            src/lib.rs:3:right: usize
+            src/lib.rs:left: usize
+            src/lib.rs:right: usize
         "#,
     );
 }
@@ -1227,11 +1251,11 @@ fn test_only_matching_multiline_overlapping_matches() {
         "rust_overlapping",
         r#"
             $ tree-sitter-grep -q '(closure_expression) @c' -l rust --only-matching
-            src/lib.rs:2:|| {
-            src/lib.rs:3:        || {
-            src/lib.rs:4:            println!("whee");
-            src/lib.rs:5:        }
-            src/lib.rs:6:    }
+            src/lib.rs:|| {
+            src/lib.rs:        || {
+            src/lib.rs:            println!("whee");
+            src/lib.rs:        }
+            src/lib.rs:    }
         "#,
     );
 }
@@ -1242,10 +1266,10 @@ fn test_only_matching_multiline_overlapping_matches_starting_on_same_line() {
         "rust_overlapping_start_same_line",
         r#"
             $ tree-sitter-grep -q '(closure_expression) @c' -l rust --only-matching
-            src/lib.rs:3:|| { || {
-            src/lib.rs:4:            println!("whee");
-            src/lib.rs:5:        }
-            src/lib.rs:6:    }
+            src/lib.rs:|| { || {
+            src/lib.rs:            println!("whee");
+            src/lib.rs:        }
+            src/lib.rs:    }
         "#,
     );
 }
@@ -1267,15 +1291,15 @@ fn test_byte_offset() {
         "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' -l rust --byte-offset
-            src/helpers.rs:1:0:pub fn helper() {}
-            src/stop.rs:1:0:fn stop_it() {}
-            src/lib.rs:3:14:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:63:    left + right
-            src/lib.rs:5:80:}
-            src/lib.rs:12:139:    fn it_works() {
-            src/lib.rs:13:159:        let result = add(2, 2);
-            src/lib.rs:14:191:        assert_eq!(result, 4);
-            src/lib.rs:15:222:    }
+            src/helpers.rs:0:pub fn helper() {}
+            src/stop.rs:0:fn stop_it() {}
+            src/lib.rs:14:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:63:    left + right
+            src/lib.rs:80:}
+            src/lib.rs:139:    fn it_works() {
+            src/lib.rs:159:        let result = add(2, 2);
+            src/lib.rs:191:        assert_eq!(result, 4);
+            src/lib.rs:222:    }
         "#,
     );
 }
@@ -1286,15 +1310,15 @@ fn test_byte_offset_short_option() {
         "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(function_item) @function_item' -l rust -b
-            src/helpers.rs:1:0:pub fn helper() {}
-            src/stop.rs:1:0:fn stop_it() {}
-            src/lib.rs:3:14:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:63:    left + right
-            src/lib.rs:5:80:}
-            src/lib.rs:12:139:    fn it_works() {
-            src/lib.rs:13:159:        let result = add(2, 2);
-            src/lib.rs:14:191:        assert_eq!(result, 4);
-            src/lib.rs:15:222:    }
+            src/helpers.rs:0:pub fn helper() {}
+            src/stop.rs:0:fn stop_it() {}
+            src/lib.rs:14:pub fn add(left: usize, right: usize) -> usize {
+            src/lib.rs:63:    left + right
+            src/lib.rs:80:}
+            src/lib.rs:139:    fn it_works() {
+            src/lib.rs:159:        let result = add(2, 2);
+            src/lib.rs:191:        assert_eq!(result, 4);
+            src/lib.rs:222:    }
         "#,
     );
 }
@@ -1319,8 +1343,8 @@ fn test_byte_offset_only_matching() {
         "rust_project_byte_offset",
         r#"
             $ tree-sitter-grep -q '(parameter) @c' -l rust --byte-offset --only-matching
-            src/lib.rs:3:25:left: usize
-            src/lib.rs:3:38:right: usize
+            src/lib.rs:25:left: usize
+            src/lib.rs:38:right: usize
         "#,
     );
 }
