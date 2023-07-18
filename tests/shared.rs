@@ -4,6 +4,7 @@ use std::{borrow::Cow, env, path::PathBuf, process::Command};
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use regex::Captures;
+use text_diff::print_diff;
 
 #[macro_export]
 macro_rules! regex {
@@ -193,6 +194,9 @@ pub fn assert_non_match_output(fixture_dir_name: &str, command_and_output: &str)
         .success()
         .stdout(predicate::function(|stdout: &str| {
             let stdout = massage_error_output(stdout);
+            if stdout != output {
+                print_diff(&stdout, &output, " ");
+            }
             stdout == output
         }));
 }

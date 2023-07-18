@@ -317,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset|--colors <COLORS>|--color <WHEN>|--pretty|--heading|--no-heading>
 
             For more information, try '--help'.
         "#,
@@ -490,6 +490,75 @@ fn test_help_option() {
 
                       If -o (--only-matching) is specified, print the offset of the matching part itself.
 
+                  --colors <COLORS>
+                      This flag specifies color settings for use in the output.
+
+                      This flag may be provided multiple times. Settings are applied iteratively. Colors are
+                      limited to one of eight choices: red, blue, green, cyan, magenta, yellow, white and black.
+                      Styles are limited to nobold, bold, nointense, intense, nounderline or underline.
+
+                      The format of the flag is '{type}:{attribute}:{value}'. '{type}' should be one of path,
+                      line, column or match. '{attribute}' can be fg, bg or style. '{value}' is either a color
+                      (for fg and bg) or a text style. A special format, '{type}:none', will clear all color
+                      settings for '{type}'.
+
+                      For example, the following command will change the match color to magenta and the
+                      background color for line numbers to yellow:
+
+                      tree-sitter-grep --colors 'match:fg:magenta' --colors 'line:bg:yellow' -q '(function_item)
+                      @f'
+
+                      Extended colors can be used for '{value}' when the terminal supports ANSI color sequences.
+                      These are specified as either 'x' (256-color) or 'x,x,x' (24-bit truecolor) where x is a
+                      number between 0 and 255 inclusive. x may be given as a normal decimal number or a
+                      hexadecimal number, which is prefixed by `0x`.
+
+                      For example, the following command will change the match background color to that
+                      represented by the rgb value (0,128,255):
+
+                      tree-sitter-grep --colors 'match:bg:0,128,255'
+
+                      or, equivalently,
+
+                      tree-sitter-grep --colors 'match:bg:0x0,0x80,0xFF'
+
+                      Note that the intense and nointense style flags will have no effect when used alongside
+                      these extended color codes.
+
+                  --color <WHEN>
+                      This flag controls when to use colors.
+
+                      The default setting is 'auto', which means tree-sitter-grep will try to guess when to use
+                      colors. For example, if tree-sitter-grep is printing to a terminal, then it will use
+                      colors, but if it is redirected to a file or a pipe, then it will suppress color output.
+                      tree-sitter-grep will suppress color output in some other circumstances as well. For
+                      example, if the TERM environment variable is not set or set to 'dumb', then
+                      tree-sitter-grep will not use colors.
+
+                      When the --vimgrep flag is given to tree-sitter-grep, then the default value for the
+                      --color flag changes to 'never'.
+
+                      Possible values:
+                      - never:  Colors will never be used
+                      - auto:   The default. tree-sitter-grep tries to be smart
+                      - always: Colors will always be used regardless of where output is sent
+                      - ansi:   Like 'always', but emits ANSI escapes (even in a Windows console)
+
+              -p, --pretty
+                      This is a convenience alias for '--color always --heading --line-number'.
+
+                      This flag is useful when you still want pretty output even if you're piping
+                      tree-sitter-grep to another program or file. For example: 'tree-sitter-grep -p -q
+                      "(function_item) @c" | less -R'.
+
+                  --heading
+                      This flag prints the file path above clusters of matches from each file instead of
+                      printing the file path as a prefix for each matched line.
+
+                      This is the default mode when printing to a terminal.
+
+                      This overrides the --no-heading flag.
+
               -h, --help
                       Print help (see a summary with '-h')
         "#,
@@ -536,6 +605,15 @@ fn test_help_short_option() {
                       separate output line
               -b, --byte-offset
                       Print the 0-based byte offset within the input file before each line of output
+                  --colors <COLORS>
+                      This flag specifies color settings for use in the output
+                  --color <WHEN>
+                      This flag controls when to use colors [possible values: never, auto, always, ansi]
+              -p, --pretty
+                      This is a convenience alias for '--color always --heading --line-number'
+                  --heading
+                      This flag prints the file path above clusters of matches from each file instead of
+                      printing the file path as a prefix for each matched line
               -h, --help
                       Print help (see more with '--help')
         "#,
@@ -635,7 +713,9 @@ fn test_after_context() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --after-context 2
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:4:    left + right
             src/lib.rs:5:}
@@ -704,7 +784,9 @@ fn test_after_context_short_option() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust -A 2
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             src/lib.rs:4:    left + right
             src/lib.rs:5:}
@@ -728,7 +810,9 @@ fn test_before_context() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --before-context 3
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
@@ -753,7 +837,9 @@ fn test_before_context_short_option() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust -B 3
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
@@ -823,7 +909,9 @@ fn test_context() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --context 2
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
@@ -851,7 +939,9 @@ fn test_context_adjacent_after_and_before_context_lines() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --context 3
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
@@ -881,7 +971,9 @@ fn test_context_overlapping_after_and_before_context_lines() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --context 4
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
@@ -911,7 +1003,9 @@ fn test_context_short_option() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust -C 2
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
@@ -939,7 +1033,9 @@ fn test_before_and_after_context() {
         r#"
             $ tree-sitter-grep -q '(function_item) @f' -l rust --before-context 2 --after-context 1
             src/stop.rs:1:fn stop_it() {}
+            --
             src/helpers.rs:1:pub fn helper() {}
+            --
             src/lib.rs-1-mod helpers;
             src/lib.rs-2-
             src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
