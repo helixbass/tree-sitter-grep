@@ -171,7 +171,7 @@ pub struct Args {
     ///
     /// When the --vimgrep flag is given to tree-sitter-grep, then the default
     /// value for the --color flag changes to 'never'.
-    #[arg(long, value_name = "WHEN"/*, default_value_t = ColorChoiceArg::Auto*/)]
+    #[arg(long, value_name = "WHEN")]
     pub color: Option<ColorChoiceArg>,
 
     /// This is a convenience alias for '--color always --heading
