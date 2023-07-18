@@ -1632,36 +1632,26 @@ fn test_heading() {
     );
 }
 
-// #[test]
-// fn test_pretty() {
-//     assert_sorted_output(
-//         "rust_project",
-//         r#"
-//             $ tree-sitter-grep -q '(function_item) @c' -l rust --pretty
-//             \u{1b}[0m\u{1b}[1m\u{1b}[32msrc/stop.rs\u{1b}[0m
-//             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m1\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43mfn
-// stop_it() {}\u{1b}[0m
+#[test]
+fn test_pretty() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+             $ tree-sitter-grep -q '(function_item) @c' -l rust --pretty
+             [0m[1m[32msrc/stop.rs[0m
+             [0m[1m[33m1[0m:[0m[30m[43mfn stop_it() {}[0m
 
-//             \u{1b}[0m\u{1b}[1m\u{1b}[32msrc/helpers.rs\u{1b}[0m
-//             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m1\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43mpub fn
-// helper() {}\u{1b}[0m
+             [0m[1m[32msrc/helpers.rs[0m
+             [0m[1m[33m1[0m:[0m[30m[43mpub fn helper() {}[0m
 
-//             \u{1b}[0m\u{1b}[1m\u{1b}[32msrc/lib.rs\u{1b}[0m
-//             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m3\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43mpub fn
-// add(left: usize, right: usize) -> usize {\u{1b}[0m             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m4\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43m    left
-// + right\u{1b}[0m             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m5\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43m}\
-// u{1b}[0m             \u{1b}[0m\u{1b}[1m\u{1b}[33m12\u{1b}[0m:
-// \u{1b}[0m\u{1b}[30m\u{1b}[43mfn it_works() {\u{1b}[0m             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m13\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43m
-// let result = add(2, 2);\u{1b}[0m             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m14\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43m
-// assert_eq!(result, 4);\u{1b}[0m             
-// \u{1b}[0m\u{1b}[1m\u{1b}[33m15\u{1b}[0m:\u{1b}[0m\u{1b}[30m\u{1b}[43m
-// }\u{1b}[0m         "#,
-//     );
-// }
+             [0m[1m[32msrc/lib.rs[0m
+             [0m[1m[33m3[0m:[0m[30m[43mpub fn add(left: usize, right: usize) -> usize {[0m
+             [0m[1m[33m4[0m:[0m[30m[43m    left + right[0m
+             [0m[1m[33m5[0m:[0m[30m[43m}[0m
+             [0m[1m[33m12[0m:    [0m[30m[43mfn it_works() {[0m
+             [0m[1m[33m13[0m:[0m[30m[43m        let result = add(2, 2);[0m
+             [0m[1m[33m14[0m:[0m[30m[43m        assert_eq!(result, 4);[0m
+             [0m[1m[33m15[0m:[0m[30m[43m    }[0m
+        "#,
+    );
+}
