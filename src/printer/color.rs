@@ -6,10 +6,7 @@ use termcolor::{Color, ColorSpec, ParseColorError};
 
 pub fn default_color_specs() -> Vec<UserColorSpec> {
     vec![
-        #[cfg(unix)]
         "path:fg:green".parse().unwrap(),
-        #[cfg(windows)]
-        "path:fg:cyan".parse().unwrap(),
         "path:style:bold".parse().unwrap(),
         "line:fg:yellow".parse().unwrap(),
         "line:style:bold".parse().unwrap(),
