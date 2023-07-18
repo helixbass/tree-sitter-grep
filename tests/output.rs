@@ -1634,6 +1634,7 @@ fn test_heading() {
 
 #[test]
 fn test_pretty() {
+    panic!("TERM: {:?}", std::env::var("TERM"));
     assert_sorted_output(
         "rust_project",
         r#"
