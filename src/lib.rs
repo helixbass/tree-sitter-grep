@@ -12,7 +12,6 @@ use std::{
 use ignore::DirEntry;
 use plugin::get_loaded_filter;
 use rayon::prelude::*;
-use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
 use tree_sitter::{Query, QueryError};
 
@@ -273,7 +272,7 @@ pub fn run(args: Args) -> Result<RunStatus, Error> {
         get_loaded_filter(args.filter.as_deref(), args.filter_arg.as_deref())?.map(Arc::new);
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
-    let buffer_writer = BufferWriter::stdout(ColorChoice::Never);
+    let buffer_writer = args.buffer_writer();
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
     let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();

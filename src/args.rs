@@ -3,14 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use clap::{ArgGroup, Parser};
+use clap::{ArgGroup, Parser, ValueEnum};
 use ignore::{types::Types, WalkBuilder, WalkParallel};
 use rayon::iter::IterBridge;
-use termcolor::BufferWriter;
+use termcolor::{BufferWriter, ColorChoice};
 
 use crate::{
     language::SupportedLanguage,
-    printer::StandardBuilder,
+    printer::{default_color_specs, ColorSpecs, StandardBuilder, UserColorSpec},
     project_file_walker::{
         get_project_file_walker_types, into_parallel_iterator, WalkParallelIterator,
     },
@@ -18,6 +18,14 @@ use crate::{
     use_printer::Printer,
     NonFatalError,
 };
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ColorChoiceArg {
+    Never,
+    Auto,
+    Always,
+    Ansi,
+}
 
 #[derive(Parser)]
 #[clap(group(
@@ -107,6 +115,73 @@ pub struct Args {
     /// the offset of the matching part itself.
     #[arg(short = 'b', long)]
     pub byte_offset: bool,
+
+    // This flag specifies color settings for use in the output.
+    //
+    // This flag may be provided multiple times. Settings are applied iteratively. Colors are
+    // limited to one of eight choices: red, blue, green, cyan, magenta, yellow, white and
+    // black. Styles are limited to nobold, bold, nointense, intense, nounderline
+    // or underline.
+    //
+    // The format of the flag is '{type}:{attribute}:{value}'. '{type}' should be
+    // one of path, line, column or match. '{attribute}' can be fg, bg or style.
+    // '{value}' is either a color (for fg and bg) or a text style. A special format,
+    // '{type}:none', will clear all color settings for '{type}'.
+    //
+    // For example, the following command will change the match color to magenta and
+    // the background color for line numbers to yellow:
+    //
+    //     tree-sitter-grep --colors 'match:fg:magenta' --colors 'line:bg:yellow' -q
+    // '(function_item) @f'
+    //
+    // Extended colors can be used for '{value}' when the terminal supports ANSI color
+    // sequences. These are specified as either 'x' (256-color) or 'x,x,x' (24-bit
+    // truecolor) where x is a number between 0 and 255 inclusive. x may be given as
+    // a normal decimal number or a hexadecimal number, which is prefixed by `0x`.
+    //
+    // For example, the following command will change the match background color to
+    // that represented by the rgb value (0,128,255):
+    //
+    //     tree-sitter-grep --colors 'match:bg:0,128,255'
+    //
+    // or, equivalently,
+    //
+    //     tree-sitter-grep --colors 'match:bg:0x0,0x80,0xFF'
+    //
+    // Note that the intense and nointense style flags will have no effect when
+    // used alongside these extended color codes.
+    #[arg(long)]
+    pub colors: Vec<UserColorSpec>,
+
+    #[arg(long/*, default_value_t = ColorChoiceArg::Auto*/)]
+    pub color: Option<ColorChoiceArg>,
+
+    // This is a convenience alias for '--color always --heading --line-number'.
+    //
+    // This flag is useful when you still want pretty output even if you're piping tree-sitter-grep
+    // to another program or file. For example: 'tree-sitter-grep -p -q "(function_item) @c" | less
+    // -R'.
+    #[arg(short = 'p', long)]
+    pub pretty: bool,
+
+    // This flag prints the file path above clusters of matches from each file instead of printing
+    // the file path as a prefix for each matched line.
+    //
+    // This is the default mode when printing to a terminal.
+    //
+    // This overrides the --no-heading flag.
+    #[arg(long)]
+    pub heading: bool,
+
+    // Don't group matches by each file.
+    //
+    // If --no-heading is provided in addition to the -H/--with-filename flag, then file paths will
+    // be printed as a prefix for every matched line. This is the default mode when not printing to
+    // a terminal.
+    //
+    // This overrides the --heading flag.
+    #[arg(long, hide = true, overrides_with = "heading")]
+    pub no_heading: bool,
 }
 
 impl Args {
@@ -161,11 +236,15 @@ impl Args {
 
     pub(crate) fn get_printer(&self, buffer_writer: &BufferWriter) -> Printer {
         StandardBuilder::new()
+            .color_specs(self.color_specs())
+            .heading(self.heading())
             .per_match(self.per_match())
             .per_match_one_line(self.per_match_one_line())
             .column(self.column())
             .only_matching(self.only_matching)
             .byte_offset(self.byte_offset)
+            .separator_context(self.context_separator())
+            .separator_search(None)
             .build(buffer_writer.buffer())
     }
 
@@ -189,5 +268,61 @@ impl Args {
         non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     ) -> IterBridge<WalkParallelIterator> {
         into_parallel_iterator(self.get_project_file_walker(), non_fatal_errors)
+    }
+
+    pub fn color_specs(&self) -> ColorSpecs {
+        let mut specs = default_color_specs();
+        for user_color_spec in &self.colors {
+            specs.push(user_color_spec.clone());
+        }
+        ColorSpecs::new(&specs)
+    }
+
+    pub fn buffer_writer(&self) -> BufferWriter {
+        let mut wtr = BufferWriter::stdout(self.color_choice());
+        wtr.separator(self.file_separator());
+        wtr
+    }
+
+    fn color_choice(&self) -> ColorChoice {
+        match self.color.unwrap_or(ColorChoiceArg::Auto) {
+            ColorChoiceArg::Always => ColorChoice::Always,
+            ColorChoiceArg::Ansi => ColorChoice::AlwaysAnsi,
+            ColorChoiceArg::Auto => {
+                if grep_cli::is_tty_stdout() || self.pretty {
+                    ColorChoice::Auto
+                } else {
+                    ColorChoice::Never
+                }
+            }
+            ColorChoiceArg::Never => ColorChoice::Never,
+        }
+    }
+
+    fn heading(&self) -> bool {
+        if self.no_heading || self.vimgrep {
+            false
+        } else {
+            grep_cli::is_tty_stdout() || self.heading || self.pretty
+        }
+    }
+
+    fn file_separator(&self) -> Option<Vec<u8>> {
+        // if self.output_kind() != OutputKind::Standard {
+        //     return Ok(None);
+        // }
+
+        let (ctx_before, ctx_after) = self.contexts();
+        if self.heading() {
+            Some(b"".to_vec())
+        } else if ctx_before > 0 || ctx_after > 0 {
+            self.context_separator()
+        } else {
+            None
+        }
+    }
+
+    fn context_separator(&self) -> Option<Vec<u8>> {
+        Some(b"--".to_vec())
     }
 }
