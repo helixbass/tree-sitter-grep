@@ -142,7 +142,7 @@ fn massage_windows_line(line: &str) -> String {
 }
 
 fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
-    regex!(r#"\r$"#).replace(line, "")
+    regex!(r#"\r((?:\u{1b}\[\d+m)*)$"#).replace(line, "$1")
 }
 
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
