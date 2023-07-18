@@ -559,6 +559,15 @@ fn test_help_option() {
 
                       This overrides the --no-heading flag.
 
+                  --no-heading
+                      Don't group matches by each file.
+
+                      If --no-heading is provided in addition to the -H/--with-filename flag, then file paths
+                      will be printed as a prefix for every matched line. This is the default mode when not
+                      printing to a terminal.
+
+                      This overrides the --heading flag.
+
               -h, --help
                       Print help (see a summary with '-h')
         "#,
@@ -614,6 +623,8 @@ fn test_help_short_option() {
                   --heading
                       This flag prints the file path above clusters of matches from each file instead of
                       printing the file path as a prefix for each matched line
+                  --no-heading
+                      Don't group matches by each file
               -h, --help
                       Print help (see more with '--help')
         "#,

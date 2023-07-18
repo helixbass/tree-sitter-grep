@@ -199,7 +199,7 @@ pub struct Args {
     /// This is the default mode when not printing to a terminal.
     ///
     /// This overrides the --heading flag.
-    #[arg(long, hide = true, overrides_with = "heading")]
+    #[arg(long, overrides_with = "heading")]
     pub no_heading: bool,
 }
 
