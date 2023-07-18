@@ -221,6 +221,31 @@ pub struct Args {
     /// This flag overrides --with-filename.
     #[arg(short = 'I', long, overrides_with = "with_filename")]
     pub no_filename: bool,
+
+    /// Show line numbers (1-based).
+    ///
+    /// This is enabled by default when searching in a terminal.
+    #[arg(short = 'n', long)]
+    pub line_number: bool,
+
+    /// Suppress line numbers.
+    ///
+    /// This is enabled by default when not searching in a terminal.
+    #[arg(short = 'N', long, overrides_with = "line_number")]
+    pub no_line_number: bool,
+
+    /// Show column numbers (1-based).
+    ///
+    /// This only shows the column numbers for the first match on each line.
+    /// This does not try to account for Unicode. One byte is equal to one
+    /// column. This implies --line-number.
+    ///
+    /// This flag can be disabled with --no-column.
+    #[arg(long)]
+    pub column: bool,
+
+    #[arg(long, hide = true, overrides_with = "column")]
+    pub no_column: bool,
 }
 
 impl Args {
@@ -236,8 +261,26 @@ impl Args {
         self.paths.is_empty()
     }
 
-    fn line_number(&self) -> bool {
-        true
+    fn is_only_stdin(&self, paths: &[PathBuf]) -> bool {
+        paths == [Path::new("-")]
+    }
+
+    fn line_number(&self, paths: &[PathBuf]) -> bool {
+        // if self.output_kind() == OutputKind::Summary {
+        //     return false;
+        // }
+        if self.no_line_number {
+            return false;
+        }
+        // if self.output_kind() == OutputKind::JSON {
+        //     return true;
+        // }
+
+        (grep_cli::is_tty_stdout() && !self.is_only_stdin(paths))
+            || self.line_number
+            || self.column
+            || self.pretty
+            || self.vimgrep
     }
 
     fn per_match(&self) -> bool {
@@ -249,7 +292,10 @@ impl Args {
     }
 
     fn column(&self) -> bool {
-        self.vimgrep
+        if self.no_column {
+            return false;
+        }
+        self.column || self.vimgrep
     }
 
     fn contexts(&self) -> (usize, usize) {
@@ -264,10 +310,10 @@ impl Args {
         }
     }
 
-    pub(crate) fn get_searcher(&self) -> Searcher {
+    pub(crate) fn get_searcher(&self, paths: &[PathBuf]) -> Searcher {
         let (before_context, after_context) = self.contexts();
         SearcherBuilder::new()
-            .line_number(self.line_number())
+            .line_number(self.line_number(paths))
             .before_context(before_context)
             .after_context(after_context)
             .build()
