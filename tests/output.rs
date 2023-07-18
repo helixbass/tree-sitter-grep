@@ -1655,3 +1655,46 @@ fn test_pretty() {
         "#,
     );
 }
+
+#[test]
+fn test_color_always() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @c' -l rust --color always
+            [0m[1m[32msrc/stop.rs[0m:[0m[30m[43mfn stop_it() {}[0m
+            [0m[1m[32msrc/helpers.rs[0m:[0m[30m[43mpub fn helper() {}[0m
+            [0m[1m[32msrc/lib.rs[0m:[0m[30m[43mpub fn add(left: usize, right: usize) -> usize {[0m
+            [0m[1m[32msrc/lib.rs[0m:[0m[30m[43m    left + right[0m
+            [0m[1m[32msrc/lib.rs[0m:[0m[30m[43m}[0m
+            [0m[1m[32msrc/lib.rs[0m:    [0m[30m[43mfn it_works() {[0m
+            [0m[1m[32msrc/lib.rs[0m:[0m[30m[43m        let result = add(2, 2);[0m
+            [0m[1m[32msrc/lib.rs[0m:[0m[30m[43m        assert_eq!(result, 4);[0m
+            [0m[1m[32msrc/lib.rs[0m:[0m[30m[43m    }[0m
+        "#,
+    );
+}
+
+#[test]
+fn test_colors() {
+    assert_sorted_output(
+        "rust_project",
+        r#"
+            $ tree-sitter-grep -q '(function_item) @f' --pretty --colors 'match:fg:magenta' --colors 'line:bg:cyan' --colors 'path:fg:blue'
+            [0m[1m[34msrc/stop.rs[0m
+            [0m[1m[33m[46m1[0m:[0m[35m[43mfn stop_it() {}[0m
+
+            [0m[1m[34msrc/helpers.rs[0m
+            [0m[1m[33m[46m1[0m:[0m[35m[43mpub fn helper() {}[0m
+
+            [0m[1m[34msrc/lib.rs[0m
+            [0m[1m[33m[46m3[0m:[0m[35m[43mpub fn add(left: usize, right: usize) -> usize {[0m
+            [0m[1m[33m[46m4[0m:[0m[35m[43m    left + right[0m
+            [0m[1m[33m[46m5[0m:[0m[35m[43m}[0m
+            [0m[1m[33m[46m12[0m:    [0m[35m[43mfn it_works() {[0m
+            [0m[1m[33m[46m13[0m:[0m[35m[43m        let result = add(2, 2);[0m
+            [0m[1m[33m[46m14[0m:[0m[35m[43m        assert_eq!(result, 4);[0m
+            [0m[1m[33m[46m15[0m:[0m[35m[43m    }[0m
+        "#,
+    );
+}
