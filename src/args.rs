@@ -201,10 +201,30 @@ pub struct Args {
     /// This overrides the --heading flag.
     #[arg(long, overrides_with = "heading")]
     pub no_heading: bool,
+
+    /// Display the file path for matches.
+    ///
+    /// This is the default when more than one file is searched. If --heading is
+    /// enabled (the default when printing to a terminal), the file path will be
+    /// shown above clusters of matches from each file; otherwise, the file name
+    /// will be shown as a prefix for each matched line.
+    ///
+    /// This flag overrides --no-filename.
+    #[arg(short = 'H', long)]
+    pub with_filename: bool,
+
+    /// Never print the file path with the matched lines.
+    ///
+    /// This is the default when tree-sitter-grep is explicitly instructed to
+    /// search one file or stdin.
+    ///
+    /// This flag overrides --with-filename.
+    #[arg(short = 'I', long, overrides_with = "with_filename")]
+    pub no_filename: bool,
 }
 
 impl Args {
-    fn use_paths(&self) -> Vec<PathBuf> {
+    pub fn use_paths(&self) -> Vec<PathBuf> {
         if self.paths.is_empty() {
             vec![Path::new("./").to_owned()]
         } else {
@@ -253,10 +273,11 @@ impl Args {
             .build()
     }
 
-    pub(crate) fn get_printer(&self, buffer_writer: &BufferWriter) -> Printer {
+    pub(crate) fn get_printer(&self, paths: &[PathBuf], buffer_writer: &BufferWriter) -> Printer {
         StandardBuilder::new()
             .color_specs(self.color_specs())
             .heading(self.heading())
+            .path(self.with_filename(paths))
             .per_match(self.per_match())
             .per_match_one_line(self.per_match_one_line())
             .column(self.column())
@@ -343,5 +364,19 @@ impl Args {
 
     fn context_separator(&self) -> Option<Vec<u8>> {
         Some(b"--".to_vec())
+    }
+
+    fn with_filename(&self, paths: &[PathBuf]) -> bool {
+        if self.no_filename {
+            false
+        } else {
+            let path_stdin = Path::new("-");
+            self.with_filename
+                || self.vimgrep
+                || paths.len() > 1
+                || paths
+                    .get(0)
+                    .map_or(false, |p| p != path_stdin && p.is_dir())
+        }
     }
 }

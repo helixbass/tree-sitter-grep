@@ -101,13 +101,13 @@ fn test_specify_single_file() {
         "rust_project",
         r#"
             $ tree-sitter-grep --query '(function_item) @function_item' --language rust src/lib.rs
-            src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
-            src/lib.rs:4:    left + right
-            src/lib.rs:5:}
-            src/lib.rs:12:    fn it_works() {
-            src/lib.rs:13:        let result = add(2, 2);
-            src/lib.rs:14:        assert_eq!(result, 4);
-            src/lib.rs:15:    }
+            3:pub fn add(left: usize, right: usize) -> usize {
+            4:    left + right
+            5:}
+            12:    fn it_works() {
+            13:        let result = add(2, 2);
+            14:        assert_eq!(result, 4);
+            15:    }
         "#,
     );
 }
@@ -117,7 +117,7 @@ fn test_specify_single_file_preserves_leading_dot_slash() {
     assert_sorted_output(
         "rust_project",
         r#"
-            $ tree-sitter-grep --query '(function_item) @function_item' --language rust ./src/lib.rs
+            $ tree-sitter-grep --query '(function_item) @function_item' --language rust --with-filename ./src/lib.rs
             ./src/lib.rs:3:pub fn add(left: usize, right: usize) -> usize {
             ./src/lib.rs:4:    left + right
             ./src/lib.rs:5:}
@@ -317,7 +317,7 @@ fn test_unknown_option() {
 
               tip: a similar argument exists: '--query'
 
-            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset|--colors <COLORS>|--color <WHEN>|--pretty|--heading|--no-heading>
+            Usage: tree-sitter-grep <--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>> <PATHS|--query-file <PATH_TO_QUERY_FILE>|--query <QUERY_TEXT>|--capture <CAPTURE_NAME>|--language <LANGUAGE>|--filter <PATH_TO_FILTER_PLUGIN_DYNAMIC_LIBRARY>|--filter-arg <FILTER_ARG>|--vimgrep|--after-context <NUM>|--before-context <NUM>|--context <NUM>|--only-matching|--byte-offset|--colors <COLORS>|--color <WHEN>|--pretty|--heading|--no-heading|--with-filename|--no-filename>
 
             For more information, try '--help'.
         "#,
@@ -568,6 +568,24 @@ fn test_help_option() {
 
                       This overrides the --heading flag.
 
+              -H, --with-filename
+                      Display the file path for matches.
+
+                      This is the default when more than one file is searched. If --heading is enabled (the
+                      default when printing to a terminal), the file path will be shown above clusters of
+                      matches from each file; otherwise, the file name will be shown as a prefix for each
+                      matched line.
+
+                      This flag overrides --no-filename.
+
+              -I, --no-filename
+                      Never print the file path with the matched lines.
+
+                      This is the default when tree-sitter-grep is explicitly instructed to search one file or
+                      stdin.
+
+                      This flag overrides --with-filename.
+
               -h, --help
                       Print help (see a summary with '-h')
         "#,
@@ -625,6 +643,10 @@ fn test_help_short_option() {
                       printing the file path as a prefix for each matched line
                   --no-heading
                       Don't group matches by each file
+              -H, --with-filename
+                      Display the file path for matches
+              -I, --no-filename
+                      Never print the file path with the matched lines
               -h, --help
                       Print help (see more with '--help')
         "#,
