@@ -146,7 +146,7 @@ fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
 }
 
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
-    regex!(r#"^[a-zA-Z_\-\\/]+\.(?:rs|js|tsx)"#)
+    regex!(r#"^(?:[\d+m)*[a-zA-Z_\-\\/]+\.(?:rs|js|tsx)"#)
         .replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
 
