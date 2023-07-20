@@ -366,17 +366,12 @@ impl Searcher {
         let filter = &query_context.filter;
         query_cursor
             .captures(query, tree.root_node(), slice)
-            .filter_map(|(match_, found_capture_index)| {
-                let found_capture_index = found_capture_index as u32;
-                if found_capture_index != capture_index {
+            .filter_map(|(match_, index_into_query_match_captures)| {
+                let this_capture = &match_.captures[index_into_query_match_captures];
+                if this_capture.index != capture_index {
                     return None;
                 }
-                let mut nodes_for_this_capture = match_.nodes_for_capture_index(capture_index);
-                let single_captured_node = nodes_for_this_capture.next().unwrap();
-                assert!(
-                    nodes_for_this_capture.next().is_none(),
-                    "I guess .captures() always wraps up the single capture like this?"
-                );
+                let single_captured_node = this_capture.node;
                 match filter.as_ref() {
                     None => Some(CaptureInfo {
                         node: single_captured_node,
