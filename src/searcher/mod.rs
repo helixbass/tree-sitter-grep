@@ -9,7 +9,7 @@ use std::{
 };
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use tree_sitter::{Node, QueryCursor};
+use tree_sitter::QueryCursor;
 
 pub use self::mmap::MmapChoice;
 use crate::{
@@ -19,6 +19,7 @@ use crate::{
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
     treesitter::get_parser,
+    CaptureInfo,
 };
 
 mod core;
@@ -218,7 +219,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         path: P,
-        callback: impl Fn(Node, &[u8], &Path),
+        callback: impl Fn(CaptureInfo, &[u8], &Path),
     ) -> Result<(), TError>
     where
         P: AsRef<Path>,
@@ -338,7 +339,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(Node, &[u8], &Path),
+        callback: impl Fn(CaptureInfo, &[u8], &Path),
         path: &Path,
     ) -> Result<(), ConfigError> {
         self.check_config()?;
@@ -353,7 +354,7 @@ impl Searcher {
         &self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(Node, &[u8], &Path),
+        callback: impl Fn(CaptureInfo, &[u8], &Path),
         path: &Path,
     ) {
         let mut query_cursor = QueryCursor::new();
@@ -377,10 +378,14 @@ impl Searcher {
                     "I guess .captures() always wraps up the single capture like this?"
                 );
                 match filter.as_ref() {
-                    None => Some(single_captured_node),
-                    Some(filter) => filter
-                        .call(&single_captured_node)
-                        .then_some(single_captured_node),
+                    None => Some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    }),
+                    Some(filter) => filter.call(&single_captured_node).then_some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    }),
                 }
             })
             .for_each(|node| {

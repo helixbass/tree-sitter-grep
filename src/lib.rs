@@ -283,9 +283,14 @@ pub fn run_print(args: Args) -> Result<RunStatus, Error> {
     )
 }
 
+pub struct CaptureInfo<'node> {
+    pub node: Node<'node>,
+    pub pattern_index: usize,
+}
+
 pub fn run_with_callback(
     args: Args,
-    callback: impl Fn(Node, &[u8], &Path) + Sync,
+    callback: impl Fn(CaptureInfo, &[u8], &Path) + Sync,
 ) -> Result<RunStatus, Error> {
     run_for_context(
         args,
@@ -300,8 +305,8 @@ pub fn run_with_callback(
                 .search_path_callback::<_, io::Error>(
                     query_context,
                     path,
-                    |node: Node, file_contents: &[u8], path: &Path| {
-                        callback(node, file_contents, path);
+                    |capture_info: CaptureInfo, file_contents: &[u8], path: &Path| {
+                        callback(capture_info, file_contents, path);
                         matched.store(true, Ordering::SeqCst);
                     },
                 )
