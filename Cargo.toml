@@ -1,5 +1,5 @@
 [package]
-name = "tree-sitter-grep"
+name = "tree_sitter_lint_tree-sitter-grep"
 version = "0.1.0"
 edition = "2021"
 license = "Unlicense OR MIT"
@@ -8,6 +8,7 @@ authors = [
   "Peter Stuart <peter@peterstuart.org>"
 ]
 description = """
+(not-yet-landed version used by tree-sitter-lint)
 tree-sitter-grep is a grep-like search tool that
 recursively searches the current directory for a
 tree-sitter query pattern. Like ripgrep, it respects
