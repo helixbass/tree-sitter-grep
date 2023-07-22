@@ -23,7 +23,7 @@ use crate::{
 
 const ALL_NODES_QUERY: &str = "(_) @node";
 
-#[derive(Parser)]
+#[derive(Clone, Parser)]
 #[clap(group(
     ArgGroup::new("query_or_filter")
         .multiple(true)
