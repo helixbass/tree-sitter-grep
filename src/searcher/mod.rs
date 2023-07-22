@@ -354,7 +354,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(CaptureInfo),
+        mut callback: impl FnMut(CaptureInfo),
     ) -> Result<(), ConfigError> {
         self.check_config()?;
 

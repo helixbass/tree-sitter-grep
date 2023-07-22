@@ -423,7 +423,7 @@ fn run_for_context<TContext: Sync>(
 pub fn run_for_slice_with_callback(
     slice: &[u8],
     args: Args,
-    callback: impl Fn(CaptureInfo) + Sync,
+    mut callback: impl FnMut(CaptureInfo) + Sync,
 ) -> Result<RunStatus, Error> {
     let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
     let query_text = args.get_loaded_query_text()?;
