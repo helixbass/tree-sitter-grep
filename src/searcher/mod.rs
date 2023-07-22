@@ -350,6 +350,48 @@ impl Searcher {
         Ok(())
     }
 
+    pub fn search_slice_callback_no_path(
+        &mut self,
+        query_context: QueryContext,
+        slice: &[u8],
+        callback: impl Fn(CaptureInfo),
+    ) -> Result<(), ConfigError> {
+        self.check_config()?;
+
+        log::trace!("slice reader: searching via multiline strategy");
+        let mut query_cursor = QueryCursor::new();
+        let tree = get_parser(query_context.language)
+            .parse(slice, None)
+            .unwrap();
+        let query = &query_context.query;
+        let capture_index = query_context.capture_index;
+        let filter = &query_context.filter;
+        query_cursor
+            .captures(query, tree.root_node(), slice)
+            .filter_map(|(match_, index_into_query_match_captures)| {
+                let this_capture = &match_.captures[index_into_query_match_captures];
+                if this_capture.index != capture_index {
+                    return None;
+                }
+                let single_captured_node = this_capture.node;
+                match filter.as_ref() {
+                    None => Some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    }),
+                    Some(filter) => filter.call(&single_captured_node).then_some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    }),
+                }
+            })
+            .for_each(|capture_info| {
+                callback(capture_info);
+            });
+
+        Ok(())
+    }
+
     fn run_with_callback(
         &self,
         query_context: QueryContext,
@@ -383,8 +425,8 @@ impl Searcher {
                     }),
                 }
             })
-            .for_each(|node| {
-                callback(node, slice, path);
+            .for_each(|capture_info| {
+                callback(capture_info, slice, path);
             });
     }
 

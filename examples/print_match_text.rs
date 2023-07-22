@@ -1,5 +1,5 @@
 use clap::Parser;
-use tree_sitter_grep::{run_with_callback, Args};
+use tree_sitter_lint_tree_sitter_grep::{run_with_callback, Args};
 
 fn main() {
     let args = Args::parse_from(["tree_sitter_grep", "-q", "(function_item) @f"]);

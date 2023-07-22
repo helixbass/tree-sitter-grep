@@ -5,7 +5,7 @@ use std::{
 
 use libc::c_char;
 use tree_sitter::Node;
-use tree_sitter_grep::PluginInitializeReturn;
+use tree_sitter_lint_tree_sitter_grep::PluginInitializeReturn;
 
 static ROW_NUMBER: AtomicUsize = AtomicUsize::new(0);
 

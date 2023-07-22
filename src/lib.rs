@@ -75,6 +75,8 @@ pub enum Error {
     FilterPluginExpectedArgument,
     #[error("plugin couldn't parse argument {filter_arg:?}")]
     FilterPluginCouldntParseArgument { filter_arg: String },
+    #[error("language is required when passing a slice")]
+    LanguageMissingForSlice,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -410,6 +412,50 @@ fn run_for_context<TContext: Sync>(
         } else {
             cached_queries.error_if_no_successful_query_parsing()?;
         }
+    }
+
+    Ok(RunStatus {
+        matched: matched.load(Ordering::SeqCst),
+        non_fatal_errors,
+    })
+}
+
+pub fn run_for_slice_with_callback(
+    slice: &[u8],
+    args: Args,
+    callback: impl Fn(CaptureInfo) + Sync,
+) -> Result<RunStatus, Error> {
+    let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
+    let query_text = args.get_loaded_query_text()?;
+    let filter = args.get_loaded_filter()?;
+    let cached_queries: CachedQueries = Default::default();
+    let capture_index = CaptureIndex::default();
+    let matched = AtomicBool::new(false);
+    let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();
+
+    let query = match cached_queries.get_and_cache_query_for_language(&query_text, language) {
+        Some(query) => query,
+        None => {
+            return Err(cached_queries
+                .error_if_no_successful_query_parsing()
+                .unwrap_err())
+        }
+    };
+    let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref())?;
+
+    let query_context = QueryContext::new(query, capture_index, language.language(), filter);
+
+    get_searcher(&args)
+        .borrow_mut()
+        .search_slice_callback_no_path(query_context, slice, |capture_info: CaptureInfo| {
+            callback(capture_info);
+            matched.store(true, Ordering::SeqCst);
+        })
+        .unwrap();
+
+    let non_fatal_errors = non_fatal_errors.lock().unwrap().clone();
+    if non_fatal_errors.is_empty() {
+        cached_queries.error_if_no_successful_query_parsing()?;
     }
 
     Ok(RunStatus {
