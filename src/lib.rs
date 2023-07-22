@@ -32,7 +32,8 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::Args;
-use language::{BySupportedLanguage, SupportedLanguage};
+use language::BySupportedLanguage;
+pub use language::SupportedLanguage;
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
