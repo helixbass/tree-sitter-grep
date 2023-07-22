@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, OnceLock,
+        Arc, Mutex, OnceLock, RwLock,
     },
 };
 
@@ -65,7 +65,7 @@ pub enum Error {
             }
         }
     )]
-    NoSuccessfulQueryParsing(Vec<(SupportedLanguage, /* QueryError */ String)>),
+    NoSuccessfulQueryParsing(Vec<(SupportedLanguage, QueryError)>),
     #[error("query must include at least one capture (\"@whatever\")")]
     NoCaptureInQuery,
     #[error("invalid capture name '{capture_name}'")]
@@ -76,8 +76,8 @@ pub enum Error {
     FilterPluginCouldntParseArgument { filter_arg: String },
 }
 
-#[derive(Debug, Error)]
-pub enum NonFatalSearchError {
+#[derive(Clone, Debug, Error)]
+pub enum NonFatalError {
     #[error("File {path:?} is not recognized as a {specified_language:?} file")]
     ExplicitPathArgumentNotOfSpecifiedType {
         path: PathBuf,
@@ -98,8 +98,6 @@ pub enum NonFatalSearchError {
         path: PathBuf,
         languages: Vec<SupportedLanguage>,
     },
-    #[error("The provided query could not be parsed for the language of file {path:?}")]
-    QueryNotParseableForFile { path: PathBuf },
     #[error("No files were searched")]
     NothingSearched,
     #[error("{error}")]
@@ -180,7 +178,7 @@ impl CachedQueries {
             .cloned()
     }
 
-    fn error_if_no_successful_query_parsing(&self) -> Result<(), Error> {
+    fn error_if_no_successful_query_parsing(self) -> Result<(), Error> {
         if !self.0.values().any(|query| {
             query
                 .get()
@@ -189,24 +187,20 @@ impl CachedQueries {
         }) {
             let attempted_parsings = self
                 .0
-                .iter()
+                .into_iter()
                 .filter(|(_, value)| value.get().is_some())
+                .map(|(supported_language, once_lock)| {
+                    (
+                        supported_language,
+                        once_lock.into_inner().unwrap().unwrap_err(),
+                    )
+                })
                 .collect::<Vec<_>>();
             assert!(
                 !attempted_parsings.is_empty(),
                 "Should've tried to parse in at least one language or else should've already failed on no candidate files"
             );
-            return Err(Error::NoSuccessfulQueryParsing(
-                attempted_parsings
-                    .into_iter()
-                    .map(|(supported_language, once_lock)| {
-                        (
-                            supported_language,
-                            format!("{}", once_lock.get().unwrap().as_ref().unwrap_err()),
-                        )
-                    })
-                    .collect(),
-            ));
+            return Err(Error::NoSuccessfulQueryParsing(attempted_parsings));
         }
 
         Ok(())
@@ -215,11 +209,11 @@ impl CachedQueries {
 
 pub struct RunStatus {
     pub matched: bool,
-    pub non_fatal_errors: Vec<NonFatalSearchError>,
+    pub non_fatal_errors: Vec<NonFatalError>,
 }
 
 enum SingleFileSearchError {
-    NonFatalSearchError(NonFatalSearchError),
+    NonFatalSearchError(NonFatalError),
     FatalError(Error),
 }
 
@@ -229,20 +223,33 @@ impl From<Error> for SingleFileSearchError {
     }
 }
 
-impl From<NonFatalSearchError> for SingleFileSearchError {
-    fn from(value: NonFatalSearchError) -> Self {
+impl From<NonFatalError> for SingleFileSearchError {
+    fn from(value: NonFatalError) -> Self {
         Self::NonFatalSearchError(value)
     }
 }
 
-impl<TSuccess> From<Error> for Result<TSuccess, SingleFileSearchError> {
+impl From<CaptureIndexError> for SingleFileSearchError {
+    fn from(value: CaptureIndexError) -> Self {
+        Self::FatalError(value.into())
+    }
+}
+
+enum SingleFileSearchNonFailure {
+    QueryNotParseableForFile,
+    RanQuery,
+}
+
+type SingleFileSearchResult = Result<SingleFileSearchNonFailure, SingleFileSearchError>;
+
+impl From<Error> for SingleFileSearchResult {
     fn from(value: Error) -> Self {
         Err(value.into())
     }
 }
 
-impl<TSuccess> From<NonFatalSearchError> for Result<TSuccess, SingleFileSearchError> {
-    fn from(value: NonFatalSearchError) -> Self {
+impl From<NonFatalError> for SingleFileSearchResult {
+    fn from(value: NonFatalError) -> Self {
         Err(value.into())
     }
 }
@@ -321,7 +328,7 @@ fn run_for_context<TContext: Sync>(
     let capture_index = CaptureIndex::default();
     let matched = AtomicBool::new(false);
     let searched = AtomicBool::new(false);
-    let non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>> = Default::default();
+    let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();
 
     for_each_project_file(
         &args,
@@ -331,7 +338,7 @@ fn run_for_context<TContext: Sync>(
             let language = match args.language {
                 Some(specified_language) => {
                     if !matched_languages.contains(&specified_language) {
-                        return NonFatalSearchError::ExplicitPathArgumentNotOfSpecifiedType {
+                        return NonFatalError::ExplicitPathArgumentNotOfSpecifiedType {
                             path: project_file_dir_entry.path().to_owned(),
                             specified_language,
                         }
@@ -341,7 +348,7 @@ fn run_for_context<TContext: Sync>(
                 }
                 None => match matched_languages.len() {
                     0 => {
-                        return NonFatalSearchError::ExplicitPathArgumentNotOfKnownType {
+                        return NonFatalError::ExplicitPathArgumentNotOfKnownType {
                             path: project_file_dir_entry.path().to_owned(),
                         }
                         .into();
@@ -358,14 +365,11 @@ fn run_for_context<TContext: Sync>(
                             .collect::<Vec<_>>();
                         match successfully_parsed_query_languages.len() {
                             0 => {
-                                return NonFatalSearchError::QueryNotParseableForFile {
-                                    path: project_file_dir_entry.path().to_owned(),
-                                }
-                                .into();
+                                return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile);
                             }
                             1 => successfully_parsed_query_languages[0],
                             _ => {
-                                return NonFatalSearchError::AmbiguousLanguageForFile {
+                                return NonFatalError::AmbiguousLanguageForFile {
                                     path: project_file_dir_entry.path().to_owned(),
                                     languages: successfully_parsed_query_languages,
                                 }
@@ -375,14 +379,12 @@ fn run_for_context<TContext: Sync>(
                     }
                 },
             };
-            let query = cached_queries
-                .get_and_cache_query_for_language(&query_text, language)
-                .ok_or_else(|| NonFatalSearchError::QueryNotParseableForFile {
-                    path: project_file_dir_entry.path().to_owned(),
-                })?;
-            let capture_index = capture_index
-                .get_or_init(&query, args.capture_name.as_deref())
-                .map_err(Error::from)?;
+            let query = match cached_queries.get_and_cache_query_for_language(&query_text, language)
+            {
+                Some(query) => query,
+                None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
+            };
+            let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref())?;
             let path =
                 format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
 
@@ -391,25 +393,14 @@ fn run_for_context<TContext: Sync>(
 
             search_file(&context, &args, path, query_context, &matched);
 
-            Ok(())
+            Ok(SingleFileSearchNonFailure::RanQuery)
         },
     )?;
 
-    let mut non_fatal_errors = Arc::into_inner(non_fatal_errors)
-        .unwrap()
-        .into_inner()
-        .unwrap()
-        .into_iter()
-        .filter(|non_fatal_error| {
-            !matches!(
-                non_fatal_error,
-                NonFatalSearchError::QueryNotParseableForFile { .. }
-            )
-        })
-        .collect::<Vec<_>>();
+    let mut non_fatal_errors = non_fatal_errors.lock().unwrap().clone();
     if non_fatal_errors.is_empty() {
         if !searched.load(Ordering::SeqCst) {
-            non_fatal_errors.push(NonFatalSearchError::NothingSearched);
+            non_fatal_errors.push(NonFatalError::NothingSearched);
         } else {
             cached_queries.error_if_no_successful_query_parsing()?;
         }
@@ -423,13 +414,13 @@ fn run_for_context<TContext: Sync>(
 
 fn for_each_project_file(
     args: &Args,
-    non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>>,
-    callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> Result<(), SingleFileSearchError> + Sync,
+    non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
+    callback: impl Fn(DirEntry, Vec<SupportedLanguage>) -> SingleFileSearchResult + Sync,
 ) -> Result<(), Error> {
-    let fatal_error: Mutex<Option<Error>> = Default::default();
+    let fatal_error: RwLock<Option<Error>> = Default::default();
     args.get_project_file_parallel_iterator(non_fatal_errors.clone())
         .for_each(|(project_file_dir_entry, matched_languages)| {
-            if fatal_error.lock().unwrap().is_some() {
+            if fatal_error.read().unwrap().is_some() {
                 return;
             }
 
@@ -439,7 +430,7 @@ fn for_each_project_file(
                         non_fatal_errors.lock().unwrap().push(error);
                     }
                     SingleFileSearchError::FatalError(error) => {
-                        *fatal_error.lock().unwrap() = Some(error);
+                        *fatal_error.write().unwrap() = Some(error);
                     }
                 }
             }
@@ -449,16 +440,6 @@ fn for_each_project_file(
         Some(fatal_error) => Err(fatal_error),
         None => Ok(()),
     }
-}
-
-#[macro_export]
-macro_rules! only_run_once {
-    ($block:block) => {
-        static ONCE_LOCK: std::sync::OnceLock<()> = OnceLock::new();
-        ONCE_LOCK.get_or_init(|| {
-            $block;
-        });
-    };
 }
 
 fn format_relative_path(path: &Path, is_using_default_paths: bool) -> &Path {

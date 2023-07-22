@@ -87,10 +87,15 @@ pub fn fixed_map(input: TokenStream) -> TokenStream {
     );
 
     let token_enum_definition = get_token_enum_definition(&name, &variants_with_attributes);
+    let collection_inner_type = get_collection_inner_type(&variants);
     let collection_type_definition =
-        get_collection_type_definition(&collection_type_name, &variants);
-    let iter_implementations =
-        get_iter_implementations(&name, &collection_type_name, &all_variants_collection_name);
+        get_collection_type_definition(&collection_type_name, &collection_inner_type);
+    let iter_implementations = get_iter_implementations(
+        &name,
+        &collection_type_name,
+        &all_variants_collection_name,
+        &collection_inner_type,
+    );
     let index_implementations = get_index_implementations(&name, &collection_type_name);
     let deref_implementation = get_deref_implementation(&collection_type_name, &variants);
     let from_usize_implementation = get_from_usize_implementation(&name, &variants);
@@ -135,14 +140,20 @@ fn get_token_enum_definition(
     }
 }
 
-fn get_collection_type_definition(
-    collection_type_name: &Ident,
-    variants: &[Ident],
-) -> proc_macro2::TokenStream {
+fn get_collection_inner_type(variants: &[Ident]) -> proc_macro2::TokenStream {
     let len = variants.len();
     quote! {
+        [T; #len]
+    }
+}
+
+fn get_collection_type_definition(
+    collection_type_name: &Ident,
+    collection_inner_type: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    quote! {
         #[derive(Default)]
-        pub struct #collection_type_name<T>([T; #len]);
+        pub struct #collection_type_name<T>(#collection_inner_type);
     }
 }
 
@@ -150,7 +161,9 @@ fn get_iter_implementations(
     name: &Ident,
     collection_type_name: &Ident,
     all_variants_collection_name: &Ident,
+    collection_inner_type: &proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
+    let into_iter_struct_name = format_ident!("{collection_type_name}IntoIter");
     let iter_struct_name = format_ident!("{collection_type_name}Iter");
     let values_struct_name = format_ident!("{collection_type_name}Values");
 
@@ -162,6 +175,42 @@ fn get_iter_implementations(
 
             pub fn values(&self) -> #values_struct_name<'_, T> {
                 #values_struct_name::new(self)
+            }
+        }
+
+        impl<T> IntoIterator for #collection_type_name<T> {
+            type Item = (#name, T);
+            type IntoIter = #into_iter_struct_name<T>;
+
+            fn into_iter(self) -> Self::IntoIter {
+                #into_iter_struct_name::new(self)
+            }
+        }
+
+        pub struct #into_iter_struct_name<T> {
+            collection_iterator: std::iter::Enumerate<<#collection_inner_type as IntoIterator>::IntoIter>,
+            next_index: usize,
+        }
+
+        impl<T> #into_iter_struct_name<T> {
+            pub fn new(collection: #collection_type_name<T>) -> Self {
+                Self {
+                    collection_iterator: collection.0.into_iter().enumerate(),
+                    next_index: 0,
+                }
+            }
+        }
+
+        impl<T> Iterator for #into_iter_struct_name<T> {
+            type Item = (#name, T);
+
+            fn next(&mut self) -> Option<Self::Item> {
+                self.collection_iterator.next().map(|(index, item)| {
+                    (
+                        #all_variants_collection_name[index],
+                        item
+                    )
+                })
             }
         }
 

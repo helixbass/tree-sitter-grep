@@ -15,12 +15,12 @@ use crate::{
         SupportedLanguage, ALL_SUPPORTED_LANGUAGES,
         ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT,
     },
-    NonFatalSearchError,
+    NonFatalError,
 };
 
 pub(crate) fn into_parallel_iterator(
     walk_parallel: WalkParallel,
-    non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>>,
+    non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
 ) -> IterBridge<WalkParallelIterator> {
     WalkParallelIterator::new(walk_parallel, non_fatal_errors).par_bridge()
 }
@@ -33,7 +33,7 @@ pub(crate) struct WalkParallelIterator {
 impl WalkParallelIterator {
     pub fn new(
         walk_parallel: WalkParallel,
-        non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>>,
+        non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel::<(DirEntry, Vec<SupportedLanguage>)>();
         let handle = thread::spawn(move || {
