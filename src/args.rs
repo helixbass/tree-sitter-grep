@@ -18,7 +18,7 @@ use crate::{
     },
     searcher::{Searcher, SearcherBuilder},
     use_printer::Printer,
-    Error, NonFatalSearchError,
+    Error, NonFatalError,
 };
 
 const ALL_NODES_QUERY: &str = "(_) @node";
@@ -190,7 +190,7 @@ impl Args {
 
     pub(crate) fn get_project_file_parallel_iterator(
         &self,
-        non_fatal_errors: Arc<Mutex<Vec<NonFatalSearchError>>>,
+        non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     ) -> IterBridge<WalkParallelIterator> {
         into_parallel_iterator(self.get_project_file_walker(), non_fatal_errors)
     }
