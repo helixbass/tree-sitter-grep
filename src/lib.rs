@@ -464,6 +464,116 @@ pub fn run_for_slice_with_callback(
     })
 }
 
+pub fn run_with_per_file_callback(
+    args: Args,
+    per_file_callback: impl Fn(&DirEntry, Box<dyn FnMut(Box<dyn FnMut(CaptureInfo, &[u8], &Path) + '_>) + '_>)
+        + Sync,
+) -> Result<RunStatus, Error> {
+    let query_text = args.get_loaded_query_text()?;
+    let filter = args.get_loaded_filter()?;
+    let cached_queries: CachedQueries = Default::default();
+    let capture_index = CaptureIndex::default();
+    let matched = AtomicBool::new(false);
+    let searched = AtomicBool::new(false);
+    let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();
+
+    for_each_project_file(
+        &args,
+        non_fatal_errors.clone(),
+        |project_file_dir_entry, matched_languages| {
+            searched.store(true, Ordering::SeqCst);
+            let language = match args.language {
+                Some(specified_language) => {
+                    if !matched_languages.contains(&specified_language) {
+                        return NonFatalError::ExplicitPathArgumentNotOfSpecifiedType {
+                            path: project_file_dir_entry.path().to_owned(),
+                            specified_language,
+                        }
+                        .into();
+                    }
+                    specified_language
+                }
+                None => match matched_languages.len() {
+                    0 => {
+                        return NonFatalError::ExplicitPathArgumentNotOfKnownType {
+                            path: project_file_dir_entry.path().to_owned(),
+                        }
+                        .into();
+                    }
+                    1 => matched_languages[0],
+                    _ => {
+                        let successfully_parsed_query_languages = matched_languages
+                            .iter()
+                            .filter_map(|&matched_language| {
+                                cached_queries
+                                    .get_and_cache_query_for_language(&query_text, matched_language)
+                                    .map(|_| matched_language)
+                            })
+                            .collect::<Vec<_>>();
+                        match successfully_parsed_query_languages.len() {
+                            0 => {
+                                return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile);
+                            }
+                            1 => successfully_parsed_query_languages[0],
+                            _ => {
+                                return NonFatalError::AmbiguousLanguageForFile {
+                                    path: project_file_dir_entry.path().to_owned(),
+                                    languages: successfully_parsed_query_languages,
+                                }
+                                .into();
+                            }
+                        }
+                    }
+                },
+            };
+            let query = match cached_queries.get_and_cache_query_for_language(&query_text, language)
+            {
+                Some(query) => query,
+                None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
+            };
+            let capture_index = capture_index.get_or_init(&query, args.capture_name.as_deref())?;
+            let path =
+                format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
+
+            let query_context =
+                QueryContext::new(query, capture_index, language.language(), filter.clone());
+
+            per_file_callback(
+                &project_file_dir_entry,
+                Box::new(|mut per_match_callback| {
+                    get_searcher(&args)
+                        .borrow_mut()
+                        .search_path_callback::<_, io::Error>(
+                            query_context.clone(),
+                            path,
+                            |capture_info: CaptureInfo, file_contents: &[u8], path: &Path| {
+                                per_match_callback(capture_info, file_contents, path);
+                                matched.store(true, Ordering::SeqCst);
+                            },
+                        )
+                        .unwrap();
+                }),
+            );
+
+            Ok(SingleFileSearchNonFailure::RanQuery)
+        },
+    )?;
+
+    let mut non_fatal_errors = non_fatal_errors.lock().unwrap().clone();
+    if non_fatal_errors.is_empty() {
+        if !searched.load(Ordering::SeqCst) {
+            non_fatal_errors.push(NonFatalError::NothingSearched);
+        } else {
+            cached_queries.error_if_no_successful_query_parsing()?;
+        }
+    }
+
+    Ok(RunStatus {
+        matched: matched.load(Ordering::SeqCst),
+        non_fatal_errors,
+    })
+}
+
 fn for_each_project_file(
     args: &Args,
     non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,

@@ -4,6 +4,7 @@ use tree_sitter::{Language, Query};
 
 use crate::plugin::Filterer;
 
+#[derive(Clone)]
 pub struct QueryContext {
     pub query: Arc<Query>,
     pub capture_index: u32,

@@ -219,7 +219,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         path: P,
-        callback: impl Fn(CaptureInfo, &[u8], &Path),
+        callback: impl FnMut(CaptureInfo, &[u8], &Path),
     ) -> Result<(), TError>
     where
         P: AsRef<Path>,
@@ -339,7 +339,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(CaptureInfo, &[u8], &Path),
+        callback: impl FnMut(CaptureInfo, &[u8], &Path),
         path: &Path,
     ) -> Result<(), ConfigError> {
         self.check_config()?;
@@ -396,7 +396,7 @@ impl Searcher {
         &self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(CaptureInfo, &[u8], &Path),
+        mut callback: impl FnMut(CaptureInfo, &[u8], &Path),
         path: &Path,
     ) {
         let mut query_cursor = QueryCursor::new();
