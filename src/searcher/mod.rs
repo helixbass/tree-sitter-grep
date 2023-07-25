@@ -1,6 +1,7 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/mod.rs
 
 use std::{
+    borrow::Cow,
     cell::RefCell,
     cmp, fmt,
     fs::File,
@@ -9,7 +10,7 @@ use std::{
 };
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use tree_sitter::QueryCursor;
+use tree_sitter::{QueryCursor, Tree};
 
 pub use self::mmap::MmapChoice;
 use crate::{
@@ -18,8 +19,8 @@ use crate::{
     query_context::QueryContext,
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
-    treesitter::get_parser,
-    CaptureInfo,
+    treesitter::{get_parser, Parseable},
+    CaptureInfo, RopeOrSlice,
 };
 
 mod core;
@@ -353,19 +354,28 @@ impl Searcher {
     pub fn search_slice_callback_no_path(
         &mut self,
         query_context: QueryContext,
-        slice: &[u8],
+        slice: RopeOrSlice,
+        // slice: impl TextProvider<'a> + Parseable + 'a,
+        tree: Option<&Tree>,
         mut callback: impl FnMut(CaptureInfo),
     ) -> Result<(), ConfigError> {
         self.check_config()?;
 
         log::trace!("slice reader: searching via multiline strategy");
         let mut query_cursor = QueryCursor::new();
-        let tree = get_parser(query_context.language)
-            .parse(slice, None)
-            .unwrap();
         let query = &query_context.query;
         let capture_index = query_context.capture_index;
         let filter = &query_context.filter;
+        let tree: Cow<'_, Tree> = tree.map_or_else(
+            || {
+                Cow::Owned(
+                    slice
+                        .parse(&mut get_parser(query_context.language), None)
+                        .unwrap(),
+                )
+            },
+            Cow::Borrowed,
+        );
         query_cursor
             .captures(query, tree.root_node(), slice)
             .filter_map(|(match_, index_into_query_match_captures)| {
