@@ -1,7 +1,6 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/mod.rs
 
 use std::{
-    borrow::Cow,
     cell::RefCell,
     cmp, fmt,
     fs::File,
@@ -11,7 +10,7 @@ use std::{
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use streaming_iterator::StreamingIterator;
-use tree_sitter::{QueryCursor, TextProvider, Tree};
+use tree_sitter::Tree;
 
 pub use self::mmap::MmapChoice;
 use crate::{
@@ -20,7 +19,7 @@ use crate::{
     query_context::QueryContext,
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
-    treesitter::{get_captures, get_parser, Parseable},
+    treesitter::get_captures,
     CaptureInfo, RopeOrSlice,
 };
 

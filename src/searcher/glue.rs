@@ -1,14 +1,13 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/glue.rs
 
 use streaming_iterator::StreamingIterator;
-use tree_sitter::{Node, QueryCursor};
 
 use crate::{
     lines::{self, LineStep},
     query_context::QueryContext,
     searcher::{core::Core, Config, Range, Searcher},
     sink::Sink,
-    treesitter::{get_captures, get_parser},
+    treesitter::get_captures,
     CaptureInfo,
 };
 
