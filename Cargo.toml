@@ -70,7 +70,7 @@ tree-sitter-toml = "0.20.0"
 tree-sitter-typescript = "0.20.2"
 
 [patch.crates-io]
-tree-sitter = { path = "../tree-sitter/lib" }
+tree-sitter = { git = "https://github.com/helixbass/tree-sitter", rev = "57e98fb0" }
 
 [[bin]]
 name = "tree-sitter-grep"
