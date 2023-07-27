@@ -13,7 +13,7 @@ use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
-use tree_sitter::{Node, Query, QueryError, Tree};
+use tree_sitter::{Node, Query, QueryError, TextProvider, Tree};
 
 mod args;
 mod language;
@@ -37,11 +37,10 @@ pub use language::SupportedLanguage;
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
-pub use treesitter::{Parseable, RopeOrSlice};
+pub use treesitter::Parseable;
 use use_printer::get_printer;
 use use_searcher::get_searcher;
 
-pub extern crate ropey;
 pub extern crate tree_sitter;
 
 #[derive(Debug, Error)]
@@ -425,12 +424,11 @@ fn run_for_context<TContext: Sync>(
 }
 
 pub fn run_for_slice_with_callback<'a>(
-    slice: impl Into<RopeOrSlice<'a>>,
+    slice: impl TextProvider<'a> + Parseable + 'a,
     tree: Option<&Tree>,
     args: Args,
     mut callback: impl FnMut(CaptureInfo) + Sync,
 ) -> Result<RunStatus, Error> {
-    let slice = slice.into();
     let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
     let query_text = args.get_loaded_query_text()?;
     let filter = args.get_loaded_filter()?;

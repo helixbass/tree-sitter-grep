@@ -39,7 +39,6 @@ ouroboros = "0.17.2"
 proc_macros = { package = "tree_sitter_grep_proc_macros", path = "proc_macros", version = "0.1.0" }
 rayon = "1.7.0"
 regex = "1.8.2"
-ropey = "1.6.0"
 serde = { version = "1.0.77", features = ["derive"] }
 strum_macros = "0.25.1"
 termcolor = "1.2.0"
