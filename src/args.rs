@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -8,6 +9,7 @@ use clap::{ArgGroup, Parser};
 use ignore::{types::Types, WalkBuilder, WalkParallel};
 use rayon::iter::IterBridge;
 use termcolor::BufferWriter;
+use tree_sitter::Query;
 
 use crate::{
     language::SupportedLanguage,
@@ -199,18 +201,69 @@ impl Args {
         Ok(get_loaded_filter(self.filter.as_deref(), self.filter_arg.as_deref())?.map(Arc::new))
     }
 
-    pub(crate) fn get_loaded_query_text(&self) -> Result<String, Error> {
+    pub(crate) fn get_loaded_query_text_per_language(
+        &self,
+    ) -> Result<QueryOrQueryTextPerLanguage, Error> {
         Ok(
             match (self.path_to_query_file.as_ref(), self.query_text.as_ref()) {
                 (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
                     .map_err(|source| Error::QueryFileReadError {
                         source,
                         path_to_query_file: path_to_query_file.clone(),
-                    })?,
-                (None, Some(query_text)) => query_text.clone(),
-                (None, None) => ALL_NODES_QUERY.to_owned(),
+                    })?
+                    .into(),
+                (None, Some(query_text)) => query_text.clone().into(),
+                (None, None) => ALL_NODES_QUERY.to_owned().into(),
                 _ => unreachable!(),
             },
         )
+    }
+}
+
+pub enum QueryOrQueryTextPerLanguage {
+    SingleQueryText(String),
+    PerLanguage(HashMap<SupportedLanguage, Arc<Query>>),
+}
+
+impl From<String> for QueryOrQueryTextPerLanguage {
+    fn from(value: String) -> Self {
+        Self::SingleQueryText(value)
+    }
+}
+
+impl From<HashMap<SupportedLanguage, Arc<Query>>> for QueryOrQueryTextPerLanguage {
+    fn from(value: HashMap<SupportedLanguage, Arc<Query>>) -> Self {
+        Self::PerLanguage(value)
+    }
+}
+
+impl QueryOrQueryTextPerLanguage {
+    pub fn get_query_or_query_text_for_language(
+        &self,
+        language: SupportedLanguage,
+    ) -> QueryOrQueryText {
+        match self {
+            QueryOrQueryTextPerLanguage::SingleQueryText(query_text) => (&**query_text).into(),
+            QueryOrQueryTextPerLanguage::PerLanguage(per_language) => {
+                per_language.get(&language).unwrap().clone().into()
+            }
+        }
+    }
+}
+
+pub enum QueryOrQueryText<'a> {
+    QueryText(&'a str),
+    Query(Arc<Query>),
+}
+
+impl<'a> From<&'a str> for QueryOrQueryText<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::QueryText(value)
+    }
+}
+
+impl<'a> From<Arc<Query>> for QueryOrQueryText<'a> {
+    fn from(value: Arc<Query>) -> Self {
+        Self::Query(value)
     }
 }

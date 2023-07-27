@@ -9,6 +9,7 @@ use std::{
     },
 };
 
+use args::QueryOrQueryText;
 use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
@@ -176,13 +177,19 @@ fn join_with_or<TItem: fmt::Display>(list: &[TItem]) -> String {
 struct CachedQueries(BySupportedLanguage<OnceLock<Result<Arc<Query>, QueryError>>>);
 
 impl CachedQueries {
-    fn get_and_cache_query_for_language(
+    fn get_and_cache_query_for_language<'a>(
         &self,
-        query_text: &str,
+        query_or_query_text: impl Into<QueryOrQueryText<'a>>,
         language: SupportedLanguage,
     ) -> Option<Arc<Query>> {
+        let query_or_query_text = query_or_query_text.into();
         self.0[language]
-            .get_or_init(|| maybe_get_query(query_text, language.language()).map(Arc::new))
+            .get_or_init(|| match query_or_query_text {
+                QueryOrQueryText::QueryText(query_text) => {
+                    maybe_get_query(query_text, language.language()).map(Arc::new)
+                }
+                QueryOrQueryText::Query(query) => Ok(query),
+            })
             .as_ref()
             .ok()
             .cloned()
@@ -332,7 +339,7 @@ fn run_for_context<TContext: Sync>(
     context: TContext,
     search_file: impl Fn(&TContext, &Args, &Path, QueryContext, &AtomicBool) + Sync,
 ) -> Result<RunStatus, Error> {
-    let query_text = args.get_loaded_query_text()?;
+    let query_text_per_language = args.get_loaded_query_text_per_language()?;
     let filter = args.get_loaded_filter()?;
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
@@ -369,7 +376,11 @@ fn run_for_context<TContext: Sync>(
                             .iter()
                             .filter_map(|&matched_language| {
                                 cached_queries
-                                    .get_and_cache_query_for_language(&query_text, matched_language)
+                                    .get_and_cache_query_for_language(
+                                        query_text_per_language
+                                            .get_query_or_query_text_for_language(matched_language),
+                                        matched_language,
+                                    )
                                     .map(|_| matched_language)
                             })
                             .collect::<Vec<_>>();
@@ -389,8 +400,10 @@ fn run_for_context<TContext: Sync>(
                     }
                 },
             };
-            let query = match cached_queries.get_and_cache_query_for_language(&query_text, language)
-            {
+            let query = match cached_queries.get_and_cache_query_for_language(
+                query_text_per_language.get_query_or_query_text_for_language(language),
+                language,
+            ) {
                 Some(query) => query,
                 None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
             };
@@ -430,14 +443,17 @@ pub fn run_for_slice_with_callback<'a>(
 ) -> Result<RunStatus, Error> {
     let slice = slice.into();
     let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
-    let query_text = args.get_loaded_query_text()?;
+    let query_text_per_language = args.get_loaded_query_text_per_language()?;
     let filter = args.get_loaded_filter()?;
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
     let matched = AtomicBool::new(false);
     let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();
 
-    let query = match cached_queries.get_and_cache_query_for_language(&query_text, language) {
+    let query = match cached_queries.get_and_cache_query_for_language(
+        query_text_per_language.get_query_or_query_text_for_language(language),
+        language,
+    ) {
         Some(query) => query,
         None => {
             return Err(cached_queries
@@ -473,7 +489,7 @@ pub fn run_with_per_file_callback(
     per_file_callback: impl Fn(&DirEntry, Box<dyn FnMut(Box<dyn FnMut(&CaptureInfo, &[u8], &Path) + '_>) + '_>)
         + Sync,
 ) -> Result<RunStatus, Error> {
-    let query_text = args.get_loaded_query_text()?;
+    let query_text_per_language = args.get_loaded_query_text_per_language()?;
     let filter = args.get_loaded_filter()?;
     let cached_queries: CachedQueries = Default::default();
     let capture_index = CaptureIndex::default();
@@ -510,7 +526,11 @@ pub fn run_with_per_file_callback(
                             .iter()
                             .filter_map(|&matched_language| {
                                 cached_queries
-                                    .get_and_cache_query_for_language(&query_text, matched_language)
+                                    .get_and_cache_query_for_language(
+                                        query_text_per_language
+                                            .get_query_or_query_text_for_language(matched_language),
+                                        matched_language,
+                                    )
                                     .map(|_| matched_language)
                             })
                             .collect::<Vec<_>>();
@@ -530,8 +550,10 @@ pub fn run_with_per_file_callback(
                     }
                 },
             };
-            let query = match cached_queries.get_and_cache_query_for_language(&query_text, language)
-            {
+            let query = match cached_queries.get_and_cache_query_for_language(
+                query_text_per_language.get_query_or_query_text_for_language(language),
+                language,
+            ) {
                 Some(query) => query,
                 None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
             };
