@@ -37,11 +37,14 @@ pub use language::SupportedLanguage;
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
-pub use treesitter::{CaptureInfo, Parseable, RopeOrSlice};
+pub use treesitter::{
+    get_captures, get_captures_for_enclosing_node, CaptureInfo, Parseable, RopeOrSlice,
+};
 use use_printer::get_printer;
 use use_searcher::get_searcher;
 
 pub extern crate ropey;
+pub extern crate streaming_iterator;
 pub extern crate tree_sitter;
 
 #[derive(Debug, Error)]

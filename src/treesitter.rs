@@ -250,3 +250,85 @@ impl<'a, 'text, 'tree> StreamingIterator for Captures<'a, 'text, 'tree> {
         next_capture.as_ref()
     }
 }
+
+#[self_referencing]
+pub struct CapturesForEnclosingNode<'a, 'text: 'a, 'tree: 'a> {
+    text: RopeOrSlice<'text>,
+    query_cursor: QueryCursor,
+    query: &'a Query,
+    filter: Option<&'a Filterer>,
+    enclosing_node: Node<'tree>,
+    capture_index: u32,
+    #[borrows(text, mut query_cursor, query, enclosing_node)]
+    #[covariant]
+    captures_iterator: QueryCaptures<'this, 'this, 'this, RopeOrSlice<'this>>,
+    #[borrows(enclosing_node)]
+    #[covariant]
+    next_capture: Option<CaptureInfo<'this>>,
+}
+
+pub fn get_captures_for_enclosing_node<'a, 'text, 'tree>(
+    // text: impl TextProvider<'a> + Parseable,
+    text: impl Into<RopeOrSlice<'text>>,
+    query: &'a Query,
+    capture_index: u32,
+    filter: Option<&'a Filterer>,
+    enclosing_node: Node<'tree>,
+) -> CapturesForEnclosingNode<'a, 'text, 'tree> {
+    let text = text.into();
+    let query_cursor = QueryCursor::new();
+    CapturesForEnclosingNode::new(
+        text,
+        query_cursor,
+        query,
+        filter,
+        enclosing_node,
+        capture_index,
+        |text, query_cursor, query, enclosing_node| {
+            query_cursor.captures(query, *enclosing_node, *text)
+        },
+        |_| None,
+    )
+}
+
+impl<'a, 'text, 'tree> StreamingIterator for CapturesForEnclosingNode<'a, 'text, 'tree> {
+    type Item = CaptureInfo<'tree>;
+
+    fn advance(&mut self) {
+        self.with_mut(|all_fields| {
+            for (match_, index_into_query_match_captures) in all_fields.captures_iterator.by_ref() {
+                let this_capture = &match_.captures[index_into_query_match_captures];
+                if this_capture.index != *all_fields.capture_index {
+                    continue;
+                }
+                let single_captured_node = this_capture.node;
+                if all_fields
+                    .filter
+                    .as_ref()
+                    .map_or(true, |filter| filter.call(&single_captured_node))
+                {
+                    *all_fields.next_capture = Some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    });
+                    return;
+                }
+            }
+            *all_fields.next_capture = None;
+        });
+    }
+
+    fn get<'this>(&'this self) -> Option<&'this Self::Item> {
+        let next_capture = self.borrow_next_capture();
+        // SAFETY: I think this is ok as long as CaptureInfo isn't
+        // Copy/Clone?
+        // Since at that point there's no way for the "inner"
+        // CaptureInfo's contents to "outlive" the returned reference?
+        // Did this because otherwise was running into not being able
+        // to express that the "real" Item type for this trait (I think)
+        // should be CaptureInfo<'this>, not CaptureInfo<'a>
+        let next_capture: &'this Option<CaptureInfo<'tree>> =
+            unsafe { mem::transmute(next_capture) };
+        next_capture.as_ref()
+    }
+}
