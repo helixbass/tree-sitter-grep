@@ -361,6 +361,11 @@ impl Searcher {
         self.check_config()?;
 
         log::trace!("slice reader: searching via multiline strategy");
+        // get_captures(
+        //     self.core.query_context().language,
+        //     self.slice,
+        //     &self.core.query_context().query,
+        // )
         let mut query_cursor = QueryCursor::new();
         let query = &query_context.query;
         let capture_index = query_context.capture_index;

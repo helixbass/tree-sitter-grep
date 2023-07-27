@@ -41,6 +41,7 @@ rayon = "1.7.0"
 regex = "1.8.2"
 ropey = "1.6.0"
 serde = { version = "1.0.77", features = ["derive"] }
+streaming-iterator = "0.1.9"
 strum_macros = "0.25.1"
 termcolor = "1.2.0"
 thiserror = "1.0.43"

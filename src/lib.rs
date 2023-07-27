@@ -13,7 +13,7 @@ use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
-use tree_sitter::{Node, Query, QueryError, Tree};
+use tree_sitter::{Query, QueryError, Tree};
 
 mod args;
 mod language;
@@ -37,7 +37,7 @@ pub use language::SupportedLanguage;
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
-pub use treesitter::{Parseable, RopeOrSlice};
+pub use treesitter::{CaptureInfo, Parseable, RopeOrSlice};
 use use_printer::get_printer;
 use use_searcher::get_searcher;
 
@@ -295,11 +295,6 @@ pub fn run_print(args: Args) -> Result<RunStatus, Error> {
             context.buffer_writer.print(printer.get_mut()).unwrap();
         },
     )
-}
-
-pub struct CaptureInfo<'node> {
-    pub node: Node<'node>,
-    pub pattern_index: usize,
 }
 
 pub fn run_with_callback(
