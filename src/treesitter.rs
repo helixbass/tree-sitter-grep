@@ -1,8 +1,6 @@
-use std::{
-    borrow::Cow,
-    iter::{self},
-    mem,
-};
+#![allow(clippy::too_many_arguments)]
+
+use std::{borrow::Cow, iter, mem};
 
 use ouroboros::self_referencing;
 use ropey::{iter::Chunks, Rope, RopeSlice};
@@ -168,16 +166,15 @@ pub struct CaptureInfo<'a> {
     pub pattern_index: usize,
 }
 
-#[allow(clippy::too_many_arguments)]
 #[self_referencing]
-pub struct Captures<'a> {
-    text: RopeOrSlice<'a>,
+pub struct Captures<'a, 'text: 'a, 'tree: 'a> {
+    text: RopeOrSlice<'text>,
     query_cursor: QueryCursor,
     query: &'a Query,
     filter: Option<&'a Filterer>,
-    tree: Cow<'a, Tree>,
+    tree: Cow<'tree, Tree>,
     capture_index: u32,
-    #[borrows(text, mut query_cursor, query, filter, tree)]
+    #[borrows(text, mut query_cursor, query, tree)]
     #[covariant]
     captures_iterator: QueryCaptures<'this, 'this, 'this, RopeOrSlice<'this>>,
     #[borrows(tree)]
@@ -185,18 +182,18 @@ pub struct Captures<'a> {
     next_capture: Option<CaptureInfo<'this>>,
 }
 
-pub fn get_captures<'a>(
+pub fn get_captures<'a, 'text, 'tree>(
     language: Language,
     // text: impl TextProvider<'a> + Parseable,
-    text: impl Into<RopeOrSlice<'a>>,
+    text: impl Into<RopeOrSlice<'text>>,
     query: &'a Query,
     capture_index: u32,
     filter: Option<&'a Filterer>,
-    tree: Option<&'a Tree>,
-) -> Captures<'a> {
+    tree: Option<&'tree Tree>,
+) -> Captures<'a, 'text, 'tree> {
     let text = text.into();
     let query_cursor = QueryCursor::new();
-    let tree: Cow<'a, Tree> = tree.map_or_else(
+    let tree: Cow<'tree, Tree> = tree.map_or_else(
         || Cow::Owned(text.parse(&mut get_parser(language), None).unwrap()),
         Cow::Borrowed,
     );
@@ -207,67 +204,17 @@ pub fn get_captures<'a>(
         filter,
         tree,
         capture_index,
-        |text, query_cursor, query, filter, tree| {
-            let text = text.clone();
-            query_cursor.captures(query, tree.root_node(), text)
-            // .filter_map(move |(match_, index_into_query_match_captures)| {
-            //     let this_capture = &match_.captures[*index_into_query_match_captures];
-            //     if this_capture.index != capture_index {
-            //         return None;
-            //     }
-            //     let single_captured_node = this_capture.node;
-            //     match filter.as_ref() {
-            //         None => Some(CaptureInfo {
-            //             node: single_captured_node,
-            //             pattern_index: match_.pattern_index,
-            //         }),
-            //         Some(filter) => filter.call(&single_captured_node).then_some(CaptureInfo {
-            //             node: single_captured_node,
-            //             pattern_index: match_.pattern_index,
-            //         }),
-            //     }
-            // })
-        },
+        |text, query_cursor, query, tree| query_cursor.captures(query, tree.root_node(), *text),
         |_| None,
     )
 }
 
-// impl<'a> Iterator for Captures<'a> {
-//     type Item = (QueryMatch<'a, 'a>, usize);
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.with_captures_iterator_mut(|captures_iterator| captures_iterator.next())
-//     }
-// }
-
-// impl<'a, TFilterMapCallback: FnMut((QueryMatch<'a, 'a>, usize)) -> Option<CaptureInfo<'a>>> Iterator
-//     for Captures<'a, TFilterMapCallback>
-// {
-//     type Item = CaptureInfo<'a>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.with_filtered_captures_iterator_mut(|filtered_captures_iterator| {
-//             filtered_captures_iterator.next()
-//         })
-//     }
-// }
-
-// impl<'a> Iterator for Captures<'a> {
-//     type Item = CaptureInfo<'a>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         self.with_captures_iterator_mut(|captures_iterator| captures_iterator.next())
-//     }
-// }
-
-impl<'a> StreamingIterator for Captures<'a> {
-    type Item = CaptureInfo<'a>;
+impl<'a, 'text, 'tree> StreamingIterator for Captures<'a, 'text, 'tree> {
+    type Item = CaptureInfo<'tree>;
 
     fn advance(&mut self) {
         self.with_mut(|all_fields| {
-            while let Some((match_, index_into_query_match_captures)) =
-                all_fields.captures_iterator.next()
-            {
+            for (match_, index_into_query_match_captures) in all_fields.captures_iterator.by_ref() {
                 let this_capture = &match_.captures[index_into_query_match_captures];
                 if this_capture.index != *all_fields.capture_index {
                     continue;
@@ -298,7 +245,8 @@ impl<'a> StreamingIterator for Captures<'a> {
         // Did this because otherwise was running into not being able
         // to express that the "real" Item type for this trait (I think)
         // should be CaptureInfo<'this>, not CaptureInfo<'a>
-        let next_capture: &'this Option<CaptureInfo<'a>> = unsafe { mem::transmute(next_capture) };
+        let next_capture: &'this Option<CaptureInfo<'tree>> =
+            unsafe { mem::transmute(next_capture) };
         next_capture.as_ref()
     }
 }

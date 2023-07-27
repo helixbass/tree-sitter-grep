@@ -10,6 +10,7 @@ use std::{
 };
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
+use streaming_iterator::StreamingIterator;
 use tree_sitter::{QueryCursor, TextProvider, Tree};
 
 pub use self::mmap::MmapChoice;
@@ -19,8 +20,8 @@ use crate::{
     query_context::QueryContext,
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
-    treesitter::{get_parser, Parseable},
-    CaptureInfo,
+    treesitter::{get_captures, get_parser, Parseable},
+    CaptureInfo, RopeOrSlice,
 };
 
 mod core;
@@ -351,57 +352,28 @@ impl Searcher {
         Ok(())
     }
 
-    pub fn search_slice_callback_no_path<'a>(
+    pub fn search_slice_callback_no_path<'a, 'text, 'tree>(
         &mut self,
         query_context: QueryContext,
-        slice: impl TextProvider<'a> + Parseable + 'a,
-        tree: Option<&Tree>,
-        mut callback: impl FnMut(CaptureInfo),
+        // slice: impl TextProvider<'a> + Parseable + 'a,
+        slice: impl Into<RopeOrSlice<'text>>,
+        tree: Option<&'tree Tree>,
+        mut callback: impl FnMut(&CaptureInfo),
     ) -> Result<(), ConfigError> {
         self.check_config()?;
 
         log::trace!("slice reader: searching via multiline strategy");
-        // get_captures(
-        //     self.core.query_context().language,
-        //     self.slice,
-        //     &self.core.query_context().query,
-        // )
-        let mut query_cursor = QueryCursor::new();
-        let query = &query_context.query;
-        let capture_index = query_context.capture_index;
-        let filter = &query_context.filter;
-        let tree: Cow<'_, Tree> = tree.map_or_else(
-            || {
-                Cow::Owned(
-                    slice
-                        .parse(&mut get_parser(query_context.language), None)
-                        .unwrap(),
-                )
-            },
-            Cow::Borrowed,
-        );
-        query_cursor
-            .captures(query, tree.root_node(), slice)
-            .filter_map(|(match_, index_into_query_match_captures)| {
-                let this_capture = &match_.captures[index_into_query_match_captures];
-                if this_capture.index != capture_index {
-                    return None;
-                }
-                let single_captured_node = this_capture.node;
-                match filter.as_ref() {
-                    None => Some(CaptureInfo {
-                        node: single_captured_node,
-                        pattern_index: match_.pattern_index,
-                    }),
-                    Some(filter) => filter.call(&single_captured_node).then_some(CaptureInfo {
-                        node: single_captured_node,
-                        pattern_index: match_.pattern_index,
-                    }),
-                }
-            })
-            .for_each(|capture_info| {
-                callback(capture_info);
-            });
+        get_captures(
+            query_context.language,
+            slice,
+            &query_context.query,
+            query_context.capture_index,
+            query_context.filter.as_deref(),
+            tree,
+        )
+        .for_each(|capture_info| {
+            callback(capture_info);
+        });
 
         Ok(())
     }

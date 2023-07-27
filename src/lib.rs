@@ -423,7 +423,7 @@ pub fn run_for_slice_with_callback<'a>(
     slice: impl Into<RopeOrSlice<'a>>,
     tree: Option<&Tree>,
     args: Args,
-    mut callback: impl FnMut(CaptureInfo) + Sync,
+    mut callback: impl FnMut(&CaptureInfo) + Sync,
 ) -> Result<RunStatus, Error> {
     let slice = slice.into();
     let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
@@ -448,7 +448,7 @@ pub fn run_for_slice_with_callback<'a>(
 
     get_searcher(&args)
         .borrow_mut()
-        .search_slice_callback_no_path(query_context, slice, tree, |capture_info: CaptureInfo| {
+        .search_slice_callback_no_path(query_context, slice, tree, |capture_info: &CaptureInfo| {
             callback(capture_info);
             matched.store(true, Ordering::SeqCst);
         })
