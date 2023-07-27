@@ -10,7 +10,7 @@ use std::{
 };
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use tree_sitter::{QueryCursor, Tree};
+use tree_sitter::{QueryCursor, TextProvider, Tree};
 
 pub use self::mmap::MmapChoice;
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
     treesitter::{get_parser, Parseable},
-    CaptureInfo, RopeOrSlice,
+    CaptureInfo,
 };
 
 mod core;
@@ -351,11 +351,10 @@ impl Searcher {
         Ok(())
     }
 
-    pub fn search_slice_callback_no_path(
+    pub fn search_slice_callback_no_path<'a>(
         &mut self,
         query_context: QueryContext,
-        slice: RopeOrSlice,
-        // slice: impl TextProvider<'a> + Parseable + 'a,
+        slice: impl TextProvider<'a> + Parseable + 'a,
         tree: Option<&Tree>,
         mut callback: impl FnMut(CaptureInfo),
     ) -> Result<(), ConfigError> {
