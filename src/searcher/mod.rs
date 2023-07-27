@@ -221,7 +221,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         path: P,
-        callback: impl FnMut(CaptureInfo, &[u8], &Path),
+        callback: impl FnMut(&CaptureInfo, &[u8], &Path),
     ) -> Result<(), TError>
     where
         P: AsRef<Path>,
@@ -341,7 +341,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl FnMut(CaptureInfo, &[u8], &Path),
+        callback: impl FnMut(&CaptureInfo, &[u8], &Path),
         path: &Path,
     ) -> Result<(), ConfigError> {
         self.check_config()?;
@@ -382,38 +382,20 @@ impl Searcher {
         &self,
         query_context: QueryContext,
         slice: &[u8],
-        mut callback: impl FnMut(CaptureInfo, &[u8], &Path),
+        mut callback: impl FnMut(&CaptureInfo, &[u8], &Path),
         path: &Path,
     ) {
-        let mut query_cursor = QueryCursor::new();
-        let tree = get_parser(query_context.language)
-            .parse(slice, None)
-            .unwrap();
-        let query = &query_context.query;
-        let capture_index = query_context.capture_index;
-        let filter = &query_context.filter;
-        query_cursor
-            .captures(query, tree.root_node(), slice)
-            .filter_map(|(match_, index_into_query_match_captures)| {
-                let this_capture = &match_.captures[index_into_query_match_captures];
-                if this_capture.index != capture_index {
-                    return None;
-                }
-                let single_captured_node = this_capture.node;
-                match filter.as_ref() {
-                    None => Some(CaptureInfo {
-                        node: single_captured_node,
-                        pattern_index: match_.pattern_index,
-                    }),
-                    Some(filter) => filter.call(&single_captured_node).then_some(CaptureInfo {
-                        node: single_captured_node,
-                        pattern_index: match_.pattern_index,
-                    }),
-                }
-            })
-            .for_each(|capture_info| {
-                callback(capture_info, slice, path);
-            });
+        get_captures(
+            query_context.language,
+            slice,
+            &query_context.query,
+            query_context.capture_index,
+            query_context.filter.as_deref(),
+            None,
+        )
+        .for_each(|capture_info| {
+            callback(capture_info, slice, path);
+        });
     }
 
     fn check_config(&self) -> Result<(), ConfigError> {

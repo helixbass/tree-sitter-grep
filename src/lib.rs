@@ -299,7 +299,7 @@ pub fn run_print(args: Args) -> Result<RunStatus, Error> {
 
 pub fn run_with_callback(
     args: Args,
-    callback: impl Fn(CaptureInfo, &[u8], &Path) + Sync,
+    callback: impl Fn(&CaptureInfo, &[u8], &Path) + Sync,
 ) -> Result<RunStatus, Error> {
     run_for_context(
         args,
@@ -314,7 +314,7 @@ pub fn run_with_callback(
                 .search_path_callback::<_, io::Error>(
                     query_context,
                     path,
-                    |capture_info: CaptureInfo, file_contents: &[u8], path: &Path| {
+                    |capture_info: &CaptureInfo, file_contents: &[u8], path: &Path| {
                         callback(capture_info, file_contents, path);
                         matched.store(true, Ordering::SeqCst);
                     },
@@ -467,7 +467,7 @@ pub fn run_for_slice_with_callback<'a>(
 
 pub fn run_with_per_file_callback(
     args: Args,
-    per_file_callback: impl Fn(&DirEntry, Box<dyn FnMut(Box<dyn FnMut(CaptureInfo, &[u8], &Path) + '_>) + '_>)
+    per_file_callback: impl Fn(&DirEntry, Box<dyn FnMut(Box<dyn FnMut(&CaptureInfo, &[u8], &Path) + '_>) + '_>)
         + Sync,
 ) -> Result<RunStatus, Error> {
     let query_text = args.get_loaded_query_text()?;
@@ -547,7 +547,7 @@ pub fn run_with_per_file_callback(
                         .search_path_callback::<_, io::Error>(
                             query_context.clone(),
                             path,
-                            |capture_info: CaptureInfo, file_contents: &[u8], path: &Path| {
+                            |capture_info: &CaptureInfo, file_contents: &[u8], path: &Path| {
                                 per_match_callback(capture_info, file_contents, path);
                                 matched.store(true, Ordering::SeqCst);
                             },
