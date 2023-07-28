@@ -14,7 +14,7 @@ use ignore::DirEntry;
 use rayon::prelude::*;
 use termcolor::{BufferWriter, ColorChoice};
 use thiserror::Error;
-use tree_sitter::{Query, QueryError, Tree};
+use tree_sitter::{Query, QueryError, QueryMatch, Tree};
 
 mod args;
 mod language;
@@ -39,7 +39,7 @@ pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
 pub use treesitter::{
-    get_captures, get_captures_for_enclosing_node, CaptureInfo, Parseable, RopeOrSlice,
+    get_captures, get_captures_for_enclosing_node, get_matches, CaptureInfo, Parseable, RopeOrSlice,
 };
 use use_printer::get_printer;
 use use_searcher::get_searcher;
@@ -362,7 +362,7 @@ pub fn run_print(args: Args) -> Result<RunStatus, Error> {
 
 pub fn run_with_callback(
     args: Args,
-    callback: impl Fn(&CaptureInfo, &[u8], &Path) + Sync,
+    callback: impl Fn(&QueryMatch, &[u8], &Path) + Sync,
 ) -> Result<RunStatus, Error> {
     run_for_context(
         args,
@@ -377,8 +377,8 @@ pub fn run_with_callback(
                 .search_path_callback::<_, io::Error>(
                     query_context,
                     path,
-                    |capture_info: &CaptureInfo, file_contents: &[u8], path: &Path| {
-                        callback(capture_info, file_contents, path);
+                    |query_match: &QueryMatch, file_contents: &[u8], path: &Path| {
+                        callback(query_match, file_contents, path);
                         matched.store(true, Ordering::SeqCst);
                     },
                 )
@@ -492,7 +492,7 @@ pub fn run_for_slice_with_callback<'a>(
     slice: impl Into<RopeOrSlice<'a>>,
     tree: Option<&Tree>,
     args: Args,
-    mut callback: impl FnMut(&CaptureInfo) + Sync,
+    mut callback: impl FnMut(&QueryMatch) + Sync,
 ) -> Result<RunStatus, Error> {
     let slice = slice.into();
     let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
@@ -519,8 +519,8 @@ pub fn run_for_slice_with_callback<'a>(
 
     get_searcher(&args)
         .borrow_mut()
-        .search_slice_callback_no_path(query_context, slice, tree, |capture_info: &CaptureInfo| {
-            callback(capture_info);
+        .search_slice_callback_no_path(query_context, slice, tree, |query_match: &QueryMatch| {
+            callback(query_match);
             matched.store(true, Ordering::SeqCst);
         })
         .unwrap();
@@ -541,7 +541,7 @@ pub fn run_with_per_file_callback(
     per_file_callback: impl Fn(
             &DirEntry,
             SupportedLanguage,
-            Box<dyn FnMut(Box<dyn FnMut(&CaptureInfo, &[u8], &Path) + '_>) + '_>,
+            Box<dyn FnMut(Box<dyn FnMut(&QueryMatch, &[u8], &Path) + '_>) + '_>,
         ) + Sync,
 ) -> Result<RunStatus, Error> {
     let query_text_per_language = args.get_loaded_query_text_per_language()?;
@@ -628,8 +628,8 @@ pub fn run_with_per_file_callback(
                         .search_path_callback::<_, io::Error>(
                             query_context.clone(),
                             path,
-                            |capture_info: &CaptureInfo, file_contents: &[u8], path: &Path| {
-                                per_match_callback(capture_info, file_contents, path);
+                            |query_match: &QueryMatch, file_contents: &[u8], path: &Path| {
+                                per_match_callback(query_match, file_contents, path);
                                 matched.store(true, Ordering::SeqCst);
                             },
                         )

@@ -10,17 +10,17 @@ use std::{
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use streaming_iterator::StreamingIterator;
-use tree_sitter::Tree;
+use tree_sitter::{QueryMatch, Tree};
 
 pub use self::mmap::MmapChoice;
 use crate::{
+    get_matches,
     line_buffer::{alloc_error, DEFAULT_BUFFER_CAPACITY},
     matcher::{LineTerminator, Match},
     query_context::QueryContext,
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
-    treesitter::get_captures,
-    CaptureInfo, RopeOrSlice,
+    RopeOrSlice,
 };
 
 mod core;
@@ -220,7 +220,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         path: P,
-        callback: impl FnMut(&CaptureInfo, &[u8], &Path),
+        callback: impl FnMut(&QueryMatch, &[u8], &Path),
     ) -> Result<(), TError>
     where
         P: AsRef<Path>,
@@ -340,7 +340,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl FnMut(&CaptureInfo, &[u8], &Path),
+        callback: impl FnMut(&QueryMatch, &[u8], &Path),
         path: &Path,
     ) -> Result<(), ConfigError> {
         self.check_config()?;
@@ -357,22 +357,16 @@ impl Searcher {
         // slice: impl TextProvider<'a> + Parseable + 'a,
         slice: impl Into<RopeOrSlice<'text>>,
         tree: Option<&'tree Tree>,
-        mut callback: impl FnMut(&CaptureInfo),
+        mut callback: impl FnMut(&QueryMatch),
     ) -> Result<(), ConfigError> {
         self.check_config()?;
 
         log::trace!("slice reader: searching via multiline strategy");
-        get_captures(
-            query_context.language,
-            slice,
-            &query_context.query,
-            query_context.capture_index,
-            query_context.filter.as_deref(),
-            tree,
-        )
-        .for_each(|capture_info| {
-            callback(capture_info);
-        });
+        get_matches(query_context.language, slice, &query_context.query, tree).for_each(
+            |query_match| {
+                callback(query_match);
+            },
+        );
 
         Ok(())
     }
@@ -381,19 +375,11 @@ impl Searcher {
         &self,
         query_context: QueryContext,
         slice: &[u8],
-        mut callback: impl FnMut(&CaptureInfo, &[u8], &Path),
+        mut callback: impl FnMut(&QueryMatch, &[u8], &Path),
         path: &Path,
     ) {
-        get_captures(
-            query_context.language,
-            slice,
-            &query_context.query,
-            query_context.capture_index,
-            query_context.filter.as_deref(),
-            None,
-        )
-        .for_each(|capture_info| {
-            callback(capture_info, slice, path);
+        get_matches(query_context.language, slice, &query_context.query, None).for_each(|match_| {
+            callback(match_, slice, path);
         });
     }
 

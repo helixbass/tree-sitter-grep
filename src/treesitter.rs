@@ -6,7 +6,8 @@ use ouroboros::self_referencing;
 use ropey::{iter::Chunks, Rope, RopeSlice};
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{
-    Language, Node, Parser, Query, QueryCaptures, QueryCursor, QueryError, TextProvider, Tree,
+    Language, Node, Parser, Query, QueryCaptures, QueryCursor, QueryError, QueryMatch,
+    QueryMatches, TextProvider, Tree,
 };
 
 use crate::{matcher::Match, plugin::Filterer};
@@ -330,5 +331,59 @@ impl<'a, 'text, 'tree> StreamingIterator for CapturesForEnclosingNode<'a, 'text,
         let next_capture: &'this Option<CaptureInfo<'tree>> =
             unsafe { mem::transmute(next_capture) };
         next_capture.as_ref()
+    }
+}
+
+#[self_referencing]
+pub struct Matches<'a, 'text: 'a, 'tree: 'a> {
+    text: RopeOrSlice<'text>,
+    query_cursor: QueryCursor,
+    query: &'a Query,
+    tree: Cow<'tree, Tree>,
+    #[borrows(text, mut query_cursor, query, tree)]
+    #[covariant]
+    matches_iterator: QueryMatches<'this, 'this, 'this, RopeOrSlice<'this>>,
+    #[borrows(tree)]
+    #[covariant]
+    next_match: Option<QueryMatch<'this, 'this>>,
+}
+
+pub fn get_matches<'a, 'text, 'tree>(
+    language: Language,
+    text: impl Into<RopeOrSlice<'text>>,
+    query: &'a Query,
+    tree: Option<&'tree Tree>,
+) -> Matches<'a, 'text, 'tree> {
+    let text = text.into();
+    let query_cursor = QueryCursor::new();
+    let tree: Cow<'tree, Tree> = tree.map_or_else(
+        || Cow::Owned(text.parse(&mut get_parser(language), None).unwrap()),
+        Cow::Borrowed,
+    );
+    Matches::new(
+        text,
+        query_cursor,
+        query,
+        tree,
+        |text, query_cursor, query, tree| query_cursor.matches(query, tree.root_node(), *text),
+        |_| None,
+    )
+}
+
+impl<'a, 'text, 'tree> StreamingIterator for Matches<'a, 'text, 'tree> {
+    type Item = QueryMatch<'a, 'tree>;
+
+    fn advance(&mut self) {
+        self.with_mut(|all_fields| {
+            *all_fields.next_match = all_fields.matches_iterator.next();
+        });
+    }
+
+    fn get<'this>(&'this self) -> Option<&'this Self::Item> {
+        let next_match = self.borrow_next_match();
+        // SAFETY: Not as sure on this one?
+        let next_match: &'this Option<QueryMatch<'a, 'tree>> =
+            unsafe { mem::transmute(next_match) };
+        next_match.as_ref()
     }
 }

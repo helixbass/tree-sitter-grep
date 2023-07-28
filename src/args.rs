@@ -50,7 +50,7 @@ pub struct Args {
     query_text: Option<String>,
 
     #[clap(skip)]
-    query_per_language: Option<HashMap<SupportedLanguage, Arc<Query>>>,
+    query_per_language: Option<QueryPerLanguage>,
 
     /// The name of the tree-sitter query capture (without leading "@") whose
     /// matching nodes will be output.
@@ -241,9 +241,11 @@ impl ArgsBuilder {
     }
 }
 
+pub type QueryPerLanguage = HashMap<SupportedLanguage, Arc<Query>>;
+
 pub enum QueryOrQueryTextPerLanguage {
     SingleQueryText(String),
-    PerLanguage(HashMap<SupportedLanguage, Arc<Query>>),
+    PerLanguage(QueryPerLanguage),
 }
 
 impl QueryOrQueryTextPerLanguage {
@@ -266,8 +268,8 @@ impl From<String> for QueryOrQueryTextPerLanguage {
     }
 }
 
-impl From<HashMap<SupportedLanguage, Arc<Query>>> for QueryOrQueryTextPerLanguage {
-    fn from(value: HashMap<SupportedLanguage, Arc<Query>>) -> Self {
+impl From<QueryPerLanguage> for QueryOrQueryTextPerLanguage {
+    fn from(value: QueryPerLanguage) -> Self {
         Self::PerLanguage(value)
     }
 }
