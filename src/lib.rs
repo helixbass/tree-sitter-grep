@@ -623,18 +623,12 @@ pub fn run_with_per_file_callback(
                 &project_file_dir_entry,
                 language,
                 Box::new(|mut per_match_callback| {
-                    if language == SupportedLanguage::Toml {
-                        println!("in toml callback");
-                    }
                     get_searcher(&args)
                         .borrow_mut()
                         .search_path_callback::<_, io::Error>(
                             query_context.clone(),
                             path,
                             |capture_info: &CaptureInfo, file_contents: &[u8], path: &Path| {
-                                if language == SupportedLanguage::Toml {
-                                    println!("in toml match callback");
-                                }
                                 per_match_callback(capture_info, file_contents, path);
                                 matched.store(true, Ordering::SeqCst);
                             },
