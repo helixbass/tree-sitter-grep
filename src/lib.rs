@@ -32,7 +32,7 @@ mod treesitter;
 mod use_printer;
 mod use_searcher;
 
-pub use args::Args;
+pub use args::{Args, ArgsBuilder};
 use language::BySupportedLanguage;
 pub use language::SupportedLanguage;
 pub use plugin::PluginInitializeReturn;
@@ -486,8 +486,11 @@ pub fn run_for_slice_with_callback<'a>(
 
 pub fn run_with_per_file_callback(
     args: Args,
-    per_file_callback: impl Fn(&DirEntry, Box<dyn FnMut(Box<dyn FnMut(&CaptureInfo, &[u8], &Path) + '_>) + '_>)
-        + Sync,
+    per_file_callback: impl Fn(
+            &DirEntry,
+            SupportedLanguage,
+            Box<dyn FnMut(Box<dyn FnMut(&CaptureInfo, &[u8], &Path) + '_>) + '_>,
+        ) + Sync,
 ) -> Result<RunStatus, Error> {
     let query_text_per_language = args.get_loaded_query_text_per_language()?;
     let filter = args.get_loaded_filter()?;
@@ -566,6 +569,7 @@ pub fn run_with_per_file_callback(
 
             per_file_callback(
                 &project_file_dir_entry,
+                language,
                 Box::new(|mut per_match_callback| {
                     get_searcher(&args)
                         .borrow_mut()

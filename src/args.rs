@@ -6,6 +6,7 @@ use std::{
 };
 
 use clap::{ArgGroup, Parser};
+use derive_builder::Builder;
 use ignore::{types::Types, WalkBuilder, WalkParallel};
 use rayon::iter::IterBridge;
 use termcolor::BufferWriter;
@@ -25,7 +26,8 @@ use crate::{
 
 const ALL_NODES_QUERY: &str = "(_) @node";
 
-#[derive(Clone, Parser)]
+#[derive(Builder, Clone, Default, Parser)]
+#[builder(default, setter(strip_option, into))]
 #[clap(group(
     ArgGroup::new("query_or_filter")
         .multiple(true)
@@ -39,13 +41,16 @@ pub struct Args {
     ///
     /// This conflicts with the --query option.
     #[arg(short = 'Q', long = "query-file", conflicts_with = "query_text")]
-    pub path_to_query_file: Option<PathBuf>,
+    path_to_query_file: Option<PathBuf>,
 
     /// The source text of a tree-sitter query.
     ///
     /// This conflicts with the --query-file option.
     #[arg(short, long = "query", conflicts_with = "path_to_query_file")]
-    pub query_text: Option<String>,
+    query_text: Option<String>,
+
+    #[clap(skip)]
+    query_per_language: Option<HashMap<SupportedLanguage, Arc<Query>>>,
 
     /// The name of the tree-sitter query capture (without leading "@") whose
     /// matching nodes will be output.
@@ -176,7 +181,11 @@ impl Args {
     }
 
     pub(crate) fn get_project_file_walker_types(&self) -> Types {
-        get_project_file_walker_types(self.language)
+        get_project_file_walker_types(self.language.map(|language| vec![language]).or_else(|| {
+            self.query_per_language
+                .as_ref()
+                .map(|query_per_language| query_per_language.keys().cloned().collect())
+        }))
     }
 
     pub(crate) fn get_project_file_walker(&self) -> WalkParallel {
@@ -205,36 +214,36 @@ impl Args {
         &self,
     ) -> Result<QueryOrQueryTextPerLanguage, Error> {
         Ok(
-            match (self.path_to_query_file.as_ref(), self.query_text.as_ref()) {
-                (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
+            match (
+                self.path_to_query_file.as_ref(),
+                self.query_text.as_ref(),
+                self.query_per_language.as_ref(),
+            ) {
+                (Some(path_to_query_file), None, None) => fs::read_to_string(path_to_query_file)
                     .map_err(|source| Error::QueryFileReadError {
                         source,
                         path_to_query_file: path_to_query_file.clone(),
                     })?
                     .into(),
-                (None, Some(query_text)) => query_text.clone().into(),
-                (None, None) => ALL_NODES_QUERY.to_owned().into(),
+                (None, Some(query_text), None) => query_text.clone().into(),
+                (None, None, Some(query_per_language)) => query_per_language.clone().into(),
+                (None, None, None) => ALL_NODES_QUERY.to_owned().into(),
                 _ => unreachable!(),
             },
         )
     }
 }
 
+impl ArgsBuilder {
+    pub fn maybe_language(&mut self, language: Option<SupportedLanguage>) -> &mut Self {
+        self.language = Some(language);
+        self
+    }
+}
+
 pub enum QueryOrQueryTextPerLanguage {
     SingleQueryText(String),
     PerLanguage(HashMap<SupportedLanguage, Arc<Query>>),
-}
-
-impl From<String> for QueryOrQueryTextPerLanguage {
-    fn from(value: String) -> Self {
-        Self::SingleQueryText(value)
-    }
-}
-
-impl From<HashMap<SupportedLanguage, Arc<Query>>> for QueryOrQueryTextPerLanguage {
-    fn from(value: HashMap<SupportedLanguage, Arc<Query>>) -> Self {
-        Self::PerLanguage(value)
-    }
 }
 
 impl QueryOrQueryTextPerLanguage {
@@ -248,6 +257,18 @@ impl QueryOrQueryTextPerLanguage {
                 per_language.get(&language).unwrap().clone().into()
             }
         }
+    }
+}
+
+impl From<String> for QueryOrQueryTextPerLanguage {
+    fn from(value: String) -> Self {
+        Self::SingleQueryText(value)
+    }
+}
+
+impl From<HashMap<SupportedLanguage, Arc<Query>>> for QueryOrQueryTextPerLanguage {
+    fn from(value: HashMap<SupportedLanguage, Arc<Query>>) -> Self {
+        Self::PerLanguage(value)
     }
 }
 

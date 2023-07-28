@@ -26,6 +26,7 @@ rust-version = "1.70"
 bstr = "1.1.0"
 bytecount = "0.6"
 clap = { version = "4.3.0", features = ["derive", "wrap_help"] }
+derive_builder = "0.12.0"
 encoding_rs = "0.8.14"
 encoding_rs_io = "0.1.6"
 ignore = { package = "tree_sitter_grep_ignore", git = "https://github.com/helixbass/ripgrep", rev = "669ebd3", version = "0.4.20-dev.0" }
