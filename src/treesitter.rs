@@ -60,7 +60,7 @@ pub enum RopeOrSlice<'a> {
     Rope(&'a Rope),
 }
 
-impl<'a> TextProvider<'a> for RopeOrSlice<'a> {
+impl<'a> TextProvider<&'a [u8]> for RopeOrSlice<'a> {
     type I = RopeOrSliceTextProviderIterator<'a>;
 
     fn text(&mut self, node: Node) -> Self::I {
@@ -79,7 +79,7 @@ impl<'a> TextProvider<'a> for RopeOrSlice<'a> {
     }
 }
 
-impl<'a> TextProvider<'a> for &'a RopeOrSlice<'a> {
+impl<'a> TextProvider<&'a [u8]> for &'a RopeOrSlice<'a> {
     type I = RopeOrSliceTextProviderIterator<'a>;
 
     fn text(&mut self, node: Node) -> Self::I {
@@ -177,7 +177,7 @@ pub struct Captures<'a, 'text: 'a, 'tree: 'a> {
     capture_index: u32,
     #[borrows(text, mut query_cursor, query, tree)]
     #[covariant]
-    captures_iterator: QueryCaptures<'this, 'this, 'this, RopeOrSlice<'this>>,
+    captures_iterator: QueryCaptures<'this, 'this, RopeOrSlice<'this>, &'this [u8]>,
     #[borrows(tree)]
     #[covariant]
     next_capture: Option<CaptureInfo<'this>>,
@@ -262,7 +262,7 @@ pub struct CapturesForEnclosingNode<'a, 'text: 'a, 'tree: 'a> {
     capture_index: u32,
     #[borrows(text, mut query_cursor, query, enclosing_node)]
     #[covariant]
-    captures_iterator: QueryCaptures<'this, 'this, 'this, RopeOrSlice<'this>>,
+    captures_iterator: QueryCaptures<'this, 'this, RopeOrSlice<'this>, &'this [u8]>,
     #[borrows(enclosing_node)]
     #[covariant]
     next_capture: Option<CaptureInfo<'this>>,
@@ -342,7 +342,7 @@ pub struct Matches<'a, 'text: 'a, 'tree: 'a> {
     tree: Cow<'tree, Tree>,
     #[borrows(text, mut query_cursor, query, tree)]
     #[covariant]
-    matches_iterator: QueryMatches<'this, 'this, 'this, RopeOrSlice<'this>>,
+    matches_iterator: QueryMatches<'this, 'this, RopeOrSlice<'this>, &'this [u8]>,
     #[borrows(tree)]
     #[covariant]
     next_match: Option<QueryMatch<'this, 'this>>,
