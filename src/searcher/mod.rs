@@ -1,14 +1,16 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/mod.rs
 
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     cmp, fmt,
     fs::File,
     io::{self, Read},
+    ops,
     path::Path,
 };
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
+use memmap::Mmap;
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{QueryMatch, Tree};
 
@@ -214,6 +216,25 @@ impl Searcher {
         let path = path.as_ref();
         let file = File::open(path).map_err(S::Error::error_io)?;
         self.search_file_maybe_path(query_context, Some(path), &file, write_to)
+    }
+
+    pub fn load_file_contents<P, TError: SinkError>(
+        &mut self,
+        path: P,
+    ) -> Result<MmapOrRefByteVec, TError>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        let file = File::open(path).map_err(TError::error_io)?;
+
+        if let Some(mmap) = self.config.mmap.open(&file, Some(path)) {
+            return Ok(mmap.into());
+        }
+
+        self.fill_multi_line_buffer_from_file(&file)
+            .map_err(TError::error_io)?;
+        return Ok(self.multi_line_buffer.borrow().into());
     }
 
     pub fn search_path_callback<P, TError: SinkError>(
@@ -483,6 +504,34 @@ impl Searcher {
                 let doubled = 2 * buf.len();
                 buf.resize(cmp::min(doubled, limit), 0);
             }
+        }
+    }
+}
+
+pub enum MmapOrRefByteVec<'a> {
+    Mmap(Mmap),
+    RefByteVec(Ref<'a, Vec<u8>>),
+}
+
+impl<'a> From<Mmap> for MmapOrRefByteVec<'a> {
+    fn from(value: Mmap) -> Self {
+        Self::Mmap(value)
+    }
+}
+
+impl<'a> From<Ref<'a, Vec<u8>>> for MmapOrRefByteVec<'a> {
+    fn from(value: Ref<'a, Vec<u8>>) -> Self {
+        Self::RefByteVec(value)
+    }
+}
+
+impl<'a> ops::Deref for MmapOrRefByteVec<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Mmap(value) => value,
+            Self::RefByteVec(value) => value,
         }
     }
 }

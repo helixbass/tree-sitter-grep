@@ -39,7 +39,8 @@ pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
 pub use treesitter::{
-    get_captures, get_captures_for_enclosing_node, get_matches, CaptureInfo, Parseable, RopeOrSlice,
+    get_captures, get_captures_for_enclosing_node, get_matches, get_parser, CaptureInfo, Parseable,
+    RopeOrSlice,
 };
 use use_printer::get_printer;
 use use_searcher::get_searcher;
@@ -652,6 +653,111 @@ pub fn run_with_per_file_callback(
 
     Ok(RunStatus {
         matched: matched.load(Ordering::SeqCst),
+        non_fatal_errors,
+    })
+}
+
+pub fn run_with_single_per_file_callback(
+    args: Args,
+    per_file_callback: impl Fn(&DirEntry, SupportedLanguage, &[u8], &Tree, &Arc<Query>) + Sync,
+) -> Result<RunStatus, Error> {
+    let query_text_per_language = args.get_loaded_query_text_per_language()?;
+    let filter = args.get_loaded_filter()?;
+    let cached_queries: CachedQueries = Default::default();
+    let non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>> = Default::default();
+
+    for_each_project_file(
+        &args,
+        non_fatal_errors.clone(),
+        |project_file_dir_entry, matched_languages| {
+            let language = match args.language {
+                Some(specified_language) => {
+                    if !matched_languages.contains(&specified_language) {
+                        return NonFatalError::ExplicitPathArgumentNotOfSpecifiedType {
+                            path: project_file_dir_entry.path().to_owned(),
+                            specified_language,
+                        }
+                        .into();
+                    }
+                    specified_language
+                }
+                None => match matched_languages.len() {
+                    0 => {
+                        return NonFatalError::ExplicitPathArgumentNotOfKnownType {
+                            path: project_file_dir_entry.path().to_owned(),
+                        }
+                        .into();
+                    }
+                    1 => matched_languages[0],
+                    _ => {
+                        let successfully_parsed_query_languages = matched_languages
+                            .iter()
+                            .filter_map(|&matched_language| {
+                                cached_queries
+                                    .get_and_cache_query_for_language(
+                                        query_text_per_language
+                                            .get_query_or_query_text_for_language(matched_language),
+                                        matched_language,
+                                        args.capture_name.as_deref(),
+                                    )
+                                    .map(|_| matched_language)
+                            })
+                            .collect::<Vec<_>>();
+                        match successfully_parsed_query_languages.len() {
+                            0 => {
+                                return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile);
+                            }
+                            1 => successfully_parsed_query_languages[0],
+                            _ => {
+                                return NonFatalError::AmbiguousLanguageForFile {
+                                    path: project_file_dir_entry.path().to_owned(),
+                                    languages: successfully_parsed_query_languages,
+                                }
+                                .into();
+                            }
+                        }
+                    }
+                },
+            };
+            let (query, capture_index) = match cached_queries.get_and_cache_query_for_language(
+                query_text_per_language.get_query_or_query_text_for_language(language),
+                language,
+                args.capture_name.as_deref(),
+            ) {
+                Some(query) => query,
+                None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
+            };
+            let path =
+                format_relative_path(project_file_dir_entry.path(), args.is_using_default_paths());
+
+            let query_context =
+                QueryContext::new(query, capture_index, language.language(), filter.clone());
+
+            let searcher = get_searcher(&args);
+            let mut searcher = searcher.borrow_mut();
+            let file_contents = searcher.load_file_contents::<_, io::Error>(path).unwrap();
+            let tree = (&*file_contents)
+                .parse(&mut get_parser(language.language()), None)
+                .unwrap();
+            per_file_callback(
+                &project_file_dir_entry,
+                language,
+                &file_contents,
+                &tree,
+                &query_context.query,
+            );
+
+            Ok(SingleFileSearchNonFailure::RanQuery)
+        },
+    )?;
+
+    let non_fatal_errors = non_fatal_errors.lock().unwrap().clone();
+    if non_fatal_errors.is_empty() {
+        cached_queries.error_if_no_successful_query_parsing()?;
+    }
+
+    Ok(RunStatus {
+        matched: false,
         non_fatal_errors,
     })
 }

@@ -12,7 +12,7 @@ use tree_sitter::{
 
 use crate::{matcher::Match, plugin::Filterer};
 
-pub(crate) fn get_parser(language: Language) -> Parser {
+pub fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
     parser
         .set_language(language)
