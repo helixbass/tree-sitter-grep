@@ -125,7 +125,7 @@ pub static ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT: Lazy<
 static SUPPORTED_LANGUAGE_COMMENT_KINDS: Lazy<BySupportedLanguage<HashSet<&'static str>>> =
     Lazy::new(|| {
         by_supported_language!(
-            Rust => ["comment"].into(),
+            Rust => ["line_comment", "block_comment"].into(),
             Typescript => ["comment"].into(),
             Javascript => ["comment"].into(),
             Swift => ["comment"].into(),
