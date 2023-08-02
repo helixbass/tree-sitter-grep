@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ops::{Deref, Index},
 };
 
@@ -49,6 +49,10 @@ impl SupportedLanguage {
 
     pub fn name_for_ignore_select(&self) -> &'static str {
         SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT[*self]
+    }
+
+    pub fn comment_kinds(&self) -> &'static HashSet<&'static str> {
+        &SUPPORTED_LANGUAGE_COMMENT_KINDS[*self]
     }
 }
 
@@ -117,3 +121,31 @@ pub static ALL_SUPPORTED_LANGUAGES_BY_NAME_FOR_IGNORE_SELECT: Lazy<
         })
         .collect()
 });
+
+static SUPPORTED_LANGUAGE_COMMENT_KINDS: Lazy<BySupportedLanguage<HashSet<&'static str>>> =
+    Lazy::new(|| {
+        by_supported_language!(
+            Rust => ["comment"].into(),
+            Typescript => ["comment"].into(),
+            Javascript => ["comment"].into(),
+            Swift => ["comment"].into(),
+            ObjectiveC => ["comment"].into(),
+            Toml => ["comment"].into(),
+            Python => ["comment"].into(),
+            Ruby => ["comment"].into(),
+            C => ["comment"].into(),
+            Cpp => ["comment"].into(),
+            Go => ["comment"].into(),
+            Java => ["comment"].into(),
+            CSharp => ["comment"].into(),
+            Kotlin => ["comment"].into(),
+            Elisp => ["comment"].into(),
+            Elm => ["comment"].into(),
+            Dockerfile => ["comment"].into(),
+            Html => ["comment"].into(),
+            TreeSitterQuery => ["comment"].into(),
+            Json => ["comment"].into(),
+            Css => ["comment"].into(),
+            Lua => ["comment"].into(),
+        )
+    });
