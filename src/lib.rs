@@ -492,7 +492,7 @@ pub fn run_for_slice_with_callback<'a>(
     slice: impl Into<RopeOrSlice<'a>>,
     tree: Option<&Tree>,
     args: Args,
-    mut callback: impl FnMut(&QueryMatch) + Sync,
+    mut callback: impl FnMut(&QueryMatch),
 ) -> Result<RunStatus, Error> {
     let slice = slice.into();
     let language = args.language.ok_or(Error::LanguageMissingForSlice)?;
