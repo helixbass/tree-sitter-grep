@@ -54,7 +54,7 @@ impl<'a> Parseable for &'a Rope {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum RopeOrSlice<'a> {
     Slice(&'a [u8]),
     Rope(&'a Rope),
