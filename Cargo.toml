@@ -66,7 +66,7 @@ tree-sitter-objc = "1.1.0"
 tree-sitter-python = "0.20.2"
 tree-sitter-query = "0.1.0"
 tree-sitter-ruby = "0.20.0"
-tree-sitter-rust = { package = "tree_sitter_grep_tree-sitter-rust", git = "https://github.com/helixbass/tree-sitter-rust", rev = "781a8d9", version = "0.20.3-dev.0" }
+tree-sitter-rust = { package = "tree_sitter_grep_tree-sitter-rust", git = "https://github.com/helixbass/tree-sitter-rust", rev = "90bfca4", version = "0.20.3-dev.0" }
 tree-sitter-swift = "0.3.6"
 tree-sitter-toml = "0.20.0"
 tree-sitter-typescript = "0.20.2"
