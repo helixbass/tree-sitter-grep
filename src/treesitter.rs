@@ -128,6 +128,12 @@ impl<'a> From<&'a Rope> for RopeOrSlice<'a> {
     }
 }
 
+impl<'a> From<&'a str> for RopeOrSlice<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::Slice(value.as_bytes())
+    }
+}
+
 pub enum RopeOrSliceTextProviderIterator<'a> {
     Slice(iter::Once<&'a [u8]>),
     Rope(RopeOrSliceRopeTextProviderIterator<'a>),
