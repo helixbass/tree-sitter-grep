@@ -1,6 +1,6 @@
 #![allow(clippy::too_many_arguments)]
 
-use std::{borrow::Cow, iter, mem};
+use std::{borrow::Cow, fmt, iter, mem};
 
 use ouroboros::self_referencing;
 use ropey::{iter::Chunks, Rope, RopeSlice};
@@ -54,7 +54,7 @@ impl<'a> Parseable for &'a Rope {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub enum RopeOrSlice<'a> {
     Slice(&'a [u8]),
     Rope(&'a Rope),
@@ -112,6 +112,18 @@ impl<'a> Parseable for &'a RopeOrSlice<'a> {
         match self {
             RopeOrSlice::Slice(slice) => slice.parse(parser, old_tree),
             RopeOrSlice::Rope(rope) => rope.parse(parser, old_tree),
+        }
+    }
+}
+
+impl<'a> fmt::Debug for RopeOrSlice<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Slice(arg0) => f
+                .debug_tuple("Slice")
+                .field(&std::str::from_utf8(arg0))
+                .finish(),
+            Self::Rope(arg0) => f.debug_tuple("Rope").field(arg0).finish(),
         }
     }
 }
