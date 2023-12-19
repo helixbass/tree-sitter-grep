@@ -1,4 +1,5 @@
 use std::{
+    fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -10,14 +11,17 @@ use termcolor::BufferWriter;
 
 use crate::{
     language::SupportedLanguage,
+    plugin::{get_loaded_filter, Filterer},
     printer::StandardBuilder,
     project_file_walker::{
         get_project_file_walker_types, into_parallel_iterator, WalkParallelIterator,
     },
     searcher::{Searcher, SearcherBuilder},
     use_printer::Printer,
-    NonFatalError,
+    Error, NonFatalError,
 };
+
+const ALL_NODES_QUERY: &str = "(_) @node";
 
 #[derive(Parser)]
 #[clap(group(
@@ -189,5 +193,24 @@ impl Args {
         non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     ) -> IterBridge<WalkParallelIterator> {
         into_parallel_iterator(self.get_project_file_walker(), non_fatal_errors)
+    }
+
+    pub(crate) fn get_loaded_filter(&self) -> Result<Option<Arc<Filterer>>, Error> {
+        Ok(get_loaded_filter(self.filter.as_deref(), self.filter_arg.as_deref())?.map(Arc::new))
+    }
+
+    pub(crate) fn get_loaded_query_text(&self) -> Result<String, Error> {
+        Ok(
+            match (self.path_to_query_file.as_ref(), self.query_text.as_ref()) {
+                (Some(path_to_query_file), None) => fs::read_to_string(path_to_query_file)
+                    .map_err(|source| Error::QueryFileReadError {
+                        source,
+                        path_to_query_file: path_to_query_file.clone(),
+                    })?,
+                (None, Some(query_text)) => query_text.clone(),
+                (None, None) => ALL_NODES_QUERY.to_owned(),
+                _ => unreachable!(),
+            },
+        )
     }
 }
