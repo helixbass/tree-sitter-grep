@@ -33,8 +33,8 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::{Args, ArgsBuilder};
-use language::{BySupportedLanguageLanguage, SupportedLanguageLanguage};
-pub use language::SupportedLanguage;
+use language::BySupportedLanguageLanguage;
+pub use language::{SupportedLanguage, SupportedLanguageLanguage};
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
 use treesitter::maybe_get_query;
@@ -108,7 +108,7 @@ pub enum NonFatalError {
     )]
     AmbiguousLanguageForFile {
         path: PathBuf,
-        languages: Vec<SupportedLanguage>,
+        languages: Vec<SupportedLanguageLanguage>,
     },
     #[error("No files were searched")]
     NothingSearched,
@@ -172,19 +172,19 @@ impl From<CaptureIndexError> for QueryOrCaptureIndexError {
 #[allow(clippy::type_complexity)]
 #[derive(Default)]
 struct CachedQueries(
-    BySupportedLanguageLanguage<OnceLock<Result<(Arc<Query>, CaptureIndex), QueryOrCaptureIndexError>>>,
+    BySupportedLanguageLanguage<
+        OnceLock<Result<(Arc<Query>, CaptureIndex), QueryOrCaptureIndexError>>,
+    >,
 );
 
 impl CachedQueries {
     fn get_and_cache_query_for_language<'a>(
         &self,
         query_or_query_text: impl Into<QueryOrQueryText<'a>>,
-        language: SupportedLanguage,
+        supported_language_language: SupportedLanguageLanguage,
         capture_name: Option<&str>,
-        path: Option<&Path>,
     ) -> Option<(Arc<Query>, CaptureIndex)> {
         let query_or_query_text = query_or_query_text.into();
-        let supported_language_language = language.supported_language_language(path);
         self.0[supported_language_language]
             .get_or_init(|| {
                 match query_or_query_text {
@@ -408,7 +408,7 @@ fn run_for_context<TContext: Sync>(
         |project_file_dir_entry, matched_languages| {
             searched.store(true, Ordering::SeqCst);
             let path = project_file_dir_entry.path();
-            let language = match args.language {
+            let supported_language_language = match args.language {
                 Some(specified_language) => {
                     if !matched_languages.contains(&specified_language) {
                         return NonFatalError::ExplicitPathArgumentNotOfSpecifiedType {
@@ -417,7 +417,7 @@ fn run_for_context<TContext: Sync>(
                         }
                         .into();
                     }
-                    specified_language
+                    specified_language.supported_language_language(Some(path))
                 }
                 None => match matched_languages.len() {
                     0 => {
@@ -426,20 +426,23 @@ fn run_for_context<TContext: Sync>(
                         }
                         .into();
                     }
-                    1 => matched_languages[0],
+                    1 => matched_languages[0].supported_language_language(Some(path)),
                     _ => {
                         let successfully_parsed_query_languages = matched_languages
                             .iter()
                             .filter_map(|&matched_language| {
+                                let matched_supported_language_language =
+                                    matched_language.supported_language_language(Some(path));
                                 cached_queries
                                     .get_and_cache_query_for_language(
                                         query_text_per_language
-                                            .get_query_or_query_text_for_language(matched_language),
-                                        matched_language,
+                                            .get_query_or_query_text_for_language(
+                                                matched_supported_language_language,
+                                            ),
+                                        matched_supported_language_language,
                                         args.capture_name.as_deref(),
-                                        Some(path),
                                     )
-                                    .map(|_| matched_language)
+                                    .map(|_| matched_supported_language_language)
                             })
                             .collect::<Vec<_>>();
                         match successfully_parsed_query_languages.len() {
@@ -459,19 +462,21 @@ fn run_for_context<TContext: Sync>(
                 },
             };
             let (query, capture_index) = match cached_queries.get_and_cache_query_for_language(
-                query_text_per_language.get_query_or_query_text_for_language(language),
-                language,
+                query_text_per_language.get_query_or_query_text_for_language(supported_language_language),
+                supported_language_language,
                 args.capture_name.as_deref(),
-                Some(path),
             ) {
                 Some(query) => query,
                 None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
             };
-            let relative_path =
-                format_relative_path(path, args.is_using_default_paths());
+            let relative_path = format_relative_path(path, args.is_using_default_paths());
 
-            let query_context =
-                QueryContext::new(query, capture_index, language.language(Some(path)), filter.clone());
+            let query_context = QueryContext::new(
+                query,
+                capture_index,
+                supported_language_language.language(),
+                filter.clone(),
+            );
 
             search_file(&context, &args, relative_path, query_context, &matched);
 
@@ -496,7 +501,7 @@ fn run_for_context<TContext: Sync>(
 
 pub fn run_with_single_per_file_callback(
     args: Args,
-    per_file_callback: impl Fn(&DirEntry, SupportedLanguage, &[u8], &Tree, &Arc<Query>) + Sync,
+    per_file_callback: impl Fn(&DirEntry, SupportedLanguageLanguage, &[u8], &Tree, &Arc<Query>) + Sync,
 ) -> Result<RunStatus, Error> {
     let query_text_per_language = args.get_loaded_query_text_per_language()?;
     let filter = args.get_loaded_filter()?;
@@ -508,7 +513,7 @@ pub fn run_with_single_per_file_callback(
         non_fatal_errors.clone(),
         |project_file_dir_entry, matched_languages| {
             let path = project_file_dir_entry.path();
-            let language = match args.language {
+            let supported_language_language = match args.language {
                 Some(specified_language) => {
                     if !matched_languages.contains(&specified_language) {
                         return NonFatalError::ExplicitPathArgumentNotOfSpecifiedType {
@@ -517,7 +522,7 @@ pub fn run_with_single_per_file_callback(
                         }
                         .into();
                     }
-                    specified_language
+                    specified_language.supported_language_language(Some(path))
                 }
                 None => match matched_languages.len() {
                     0 => {
@@ -526,20 +531,20 @@ pub fn run_with_single_per_file_callback(
                         }
                         .into();
                     }
-                    1 => matched_languages[0],
+                    1 => matched_languages[0].supported_language_language(Some(path)),
                     _ => {
                         let successfully_parsed_query_languages = matched_languages
                             .iter()
                             .filter_map(|&matched_language| {
+                                let matched_supported_language_language = matched_language.supported_language_language(Some(path));
                                 cached_queries
                                     .get_and_cache_query_for_language(
                                         query_text_per_language
-                                            .get_query_or_query_text_for_language(matched_language),
-                                        matched_language,
+                                            .get_query_or_query_text_for_language(matched_supported_language_language),
+                                        matched_supported_language_language,
                                         args.capture_name.as_deref(),
-                                        Some(path),
                                     )
-                                    .map(|_| matched_language)
+                                    .map(|_| matched_supported_language_language)
                             })
                             .collect::<Vec<_>>();
                         match successfully_parsed_query_languages.len() {
@@ -559,29 +564,33 @@ pub fn run_with_single_per_file_callback(
                 },
             };
             let (query, capture_index) = match cached_queries.get_and_cache_query_for_language(
-                query_text_per_language.get_query_or_query_text_for_language(language),
-                language,
+                query_text_per_language.get_query_or_query_text_for_language(supported_language_language),
+                supported_language_language,
                 args.capture_name.as_deref(),
-                Some(path),
             ) {
                 Some(query) => query,
                 None => return Ok(SingleFileSearchNonFailure::QueryNotParseableForFile),
             };
-            let relative_path =
-                format_relative_path(path, args.is_using_default_paths());
+            let relative_path = format_relative_path(path, args.is_using_default_paths());
 
-            let query_context =
-                QueryContext::new(query, capture_index, language.language(Some(path)), filter.clone());
+            let query_context = QueryContext::new(
+                query,
+                capture_index,
+                supported_language_language.language(),
+                filter.clone(),
+            );
 
             let searcher = get_searcher(&args);
             let mut searcher = searcher.borrow_mut();
-            let file_contents = searcher.load_file_contents::<_, io::Error>(relative_path).unwrap();
+            let file_contents = searcher
+                .load_file_contents::<_, io::Error>(relative_path)
+                .unwrap();
             let tree = (&*file_contents)
-                .parse(&mut get_parser(language.language(Some(path))), None)
+                .parse(&mut get_parser(supported_language_language.language()), None)
                 .unwrap();
             per_file_callback(
                 &project_file_dir_entry,
-                language,
+                supported_language_language,
                 &file_contents,
                 &tree,
                 &query_context.query,

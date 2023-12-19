@@ -21,7 +21,7 @@ use crate::{
     },
     searcher::{Searcher, SearcherBuilder},
     use_printer::Printer,
-    Error, NonFatalError,
+    Error, NonFatalError, SupportedLanguageLanguage,
 };
 
 const ALL_NODES_QUERY: &str = "(_) @node";
@@ -182,9 +182,14 @@ impl Args {
 
     pub(crate) fn get_project_file_walker_types(&self) -> Types {
         get_project_file_walker_types(self.language.map(|language| vec![language]).or_else(|| {
-            self.query_per_language
-                .as_ref()
-                .map(|query_per_language| query_per_language.keys().cloned().collect())
+            self.query_per_language.as_ref().map(|query_per_language| {
+                query_per_language
+                    .keys()
+                    .map(|supported_language_language| {
+                        supported_language_language.supported_language()
+                    })
+                    .collect()
+            })
         }))
     }
 
@@ -241,7 +246,7 @@ impl ArgsBuilder {
     }
 }
 
-pub type QueryPerLanguage = HashMap<SupportedLanguage, Arc<Query>>;
+pub type QueryPerLanguage = HashMap<SupportedLanguageLanguage, Arc<Query>>;
 
 pub enum QueryOrQueryTextPerLanguage {
     SingleQueryText(String),
@@ -251,7 +256,7 @@ pub enum QueryOrQueryTextPerLanguage {
 impl QueryOrQueryTextPerLanguage {
     pub fn get_query_or_query_text_for_language(
         &self,
-        language: SupportedLanguage,
+        language: SupportedLanguageLanguage,
     ) -> QueryOrQueryText {
         match self {
             QueryOrQueryTextPerLanguage::SingleQueryText(query_text) => (&**query_text).into(),

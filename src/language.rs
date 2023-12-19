@@ -47,19 +47,26 @@ fixed_map! {
     name => SupportedLanguageLanguage,
     variants => [
         C,
+        #[value(name = "c++")]
+        #[strum(serialize = "C++")]
         Cpp,
+        #[strum(serialize = "C#")]
         CSharp,
+        #[strum(serialize = "CSS")]
         Css,
         Dockerfile,
         Elisp,
         Elm,
         Go,
+        #[strum(serialize = "HTML")]
         Html,
         Java,
         Javascript,
+        #[strum(serialize = "JSON")]
         Json,
         Kotlin,
         Lua,
+        #[strum(serialize = "Objective-C")]
         ObjectiveC,
         Python,
         Ruby,
@@ -86,6 +93,10 @@ impl SupportedLanguage {
         }
     }
 
+    pub fn all_supported_language_languages(&self) -> &'static [SupportedLanguageLanguage] {
+        &SUPPORTED_LANGUAGE_ALL_LANGUAGES[*self]
+    }
+
     pub fn name_for_ignore_select(&self) -> &'static str {
         SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT[*self]
     }
@@ -98,6 +109,10 @@ impl SupportedLanguage {
 impl SupportedLanguageLanguage {
     pub fn language(&self) -> Language {
         SUPPORTED_LANGUAGE_LANGUAGE_LANGUAGES[*self]
+    }
+
+    pub fn supported_language(&self) -> SupportedLanguage {
+        SUPPORTED_LANGUAGE_LANGUAGE_SUPPORTED_LANGUAGES[*self]
     }
 }
 
@@ -156,6 +171,34 @@ static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<SingleLanguageOrLa
         )
     });
 
+static SUPPORTED_LANGUAGE_ALL_LANGUAGES: Lazy<BySupportedLanguage<Vec<SupportedLanguageLanguage>>> =
+    Lazy::new(|| {
+        by_supported_language!(
+            Rust => vec![SupportedLanguageLanguage::Rust],
+            Typescript => vec![SupportedLanguageLanguage::Tsx, SupportedLanguageLanguage::Typescript],
+            Javascript => vec![SupportedLanguageLanguage::Javascript],
+            Swift => vec![SupportedLanguageLanguage::Swift],
+            ObjectiveC => vec![SupportedLanguageLanguage::ObjectiveC],
+            Toml => vec![SupportedLanguageLanguage::Toml],
+            Python => vec![SupportedLanguageLanguage::Python],
+            Ruby => vec![SupportedLanguageLanguage::Ruby],
+            C => vec![SupportedLanguageLanguage::C],
+            Cpp => vec![SupportedLanguageLanguage::Cpp],
+            Go => vec![SupportedLanguageLanguage::Go],
+            Java => vec![SupportedLanguageLanguage::Java],
+            CSharp => vec![SupportedLanguageLanguage::CSharp],
+            Kotlin => vec![SupportedLanguageLanguage::Kotlin],
+            Elisp => vec![SupportedLanguageLanguage::Elisp],
+            Elm => vec![SupportedLanguageLanguage::Elm],
+            Dockerfile => vec![SupportedLanguageLanguage::Dockerfile],
+            Html => vec![SupportedLanguageLanguage::Html],
+            TreeSitterQuery => vec![SupportedLanguageLanguage::TreeSitterQuery],
+            Json => vec![SupportedLanguageLanguage::Json],
+            Css => vec![SupportedLanguageLanguage::Css],
+            Lua => vec![SupportedLanguageLanguage::Lua],
+        )
+    });
+
 static SUPPORTED_LANGUAGE_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguageLanguage<Language>> =
     Lazy::new(|| {
         by_supported_language_language!(
@@ -182,6 +225,36 @@ static SUPPORTED_LANGUAGE_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguageLanguage<L
             Json => tree_sitter_json::language(),
             Css => tree_sitter_css::language(),
             Lua => tree_sitter_lua::language(),
+        )
+    });
+
+
+static SUPPORTED_LANGUAGE_LANGUAGE_SUPPORTED_LANGUAGES: Lazy<BySupportedLanguageLanguage<SupportedLanguage>> =
+    Lazy::new(|| {
+        by_supported_language_language!(
+            Rust => SupportedLanguage::Rust,
+            Typescript => SupportedLanguage::Typescript,
+            Tsx => SupportedLanguage::Typescript,
+            Javascript => SupportedLanguage::Javascript,
+            Swift => SupportedLanguage::Swift,
+            ObjectiveC => SupportedLanguage::ObjectiveC,
+            Toml => SupportedLanguage::Toml,
+            Python => SupportedLanguage::Python,
+            Ruby => SupportedLanguage::Ruby,
+            C => SupportedLanguage::C,
+            Cpp => SupportedLanguage::Cpp,
+            Go => SupportedLanguage::Go,
+            Java => SupportedLanguage::Java,
+            CSharp => SupportedLanguage::CSharp,
+            Kotlin => SupportedLanguage::Kotlin,
+            Elisp => SupportedLanguage::Elisp,
+            Elm => SupportedLanguage::Elm,
+            Dockerfile => SupportedLanguage::Dockerfile,
+            Html => SupportedLanguage::Html,
+            TreeSitterQuery => SupportedLanguage::TreeSitterQuery,
+            Json => SupportedLanguage::Json,
+            Css => SupportedLanguage::Css,
+            Lua => SupportedLanguage::Lua,
         )
     });
 
