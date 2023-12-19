@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, Index},
+    ops::{Deref, Index}, path::Path,
 };
 
 use once_cell::sync::Lazy;
@@ -43,8 +43,11 @@ fixed_map! {
 }
 
 impl SupportedLanguage {
-    pub fn language(&self) -> Language {
-        SUPPORTED_LANGUAGE_LANGUAGES[*self]
+    pub fn language(&self, path: Option<&Path>) -> Language {
+        match &SUPPORTED_LANGUAGE_LANGUAGES[*self] {
+            SingleLanguageOrLanguageFromPath::SingleLanguage(language) => *language,
+            SingleLanguageOrLanguageFromPath::LanguageFromPath(language_from_path) => language_from_path.from_path(path),
+        }
     }
 
     pub fn name_for_ignore_select(&self) -> &'static str {
@@ -56,30 +59,57 @@ impl SupportedLanguage {
     }
 }
 
-static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<Language>> = Lazy::new(|| {
+enum SingleLanguageOrLanguageFromPath {
+    SingleLanguage(Language),
+    LanguageFromPath(Box<dyn LanguageFromPath>),
+}
+
+impl From<Language> for SingleLanguageOrLanguageFromPath {
+    fn from(value: Language) -> Self {
+        Self::SingleLanguage(value)
+    }
+}
+
+trait LanguageFromPath: Send + Sync {
+    #[allow(clippy::wrong_self_convention)]
+    fn from_path(&self, path: Option<&Path>) -> Language;
+}
+
+struct TypescriptLanguageFromPath;
+
+impl LanguageFromPath for TypescriptLanguageFromPath {
+    fn from_path(&self, path: Option<&Path>) -> Language {
+        match path.and_then(|path| path.extension()) {
+            Some(extension) if "tsx" == extension => tree_sitter_typescript::language_tsx(),
+            _ => tree_sitter_typescript::language_typescript(),
+        }
+    }
+}
+
+static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<SingleLanguageOrLanguageFromPath>> = Lazy::new(|| {
     by_supported_language!(
-        Rust => tree_sitter_rust::language(),
-        Typescript => tree_sitter_typescript::language_tsx(),
-        Javascript => tree_sitter_javascript::language(),
-        Swift => tree_sitter_swift::language(),
-        ObjectiveC => tree_sitter_objc::language(),
-        Toml => tree_sitter_toml::language(),
-        Python => tree_sitter_python::language(),
-        Ruby => tree_sitter_ruby::language(),
-        C => tree_sitter_c::language(),
-        Cpp => tree_sitter_cpp::language(),
-        Go => tree_sitter_go::language(),
-        Java => tree_sitter_java::language(),
-        CSharp => tree_sitter_c_sharp::language(),
-        Kotlin => tree_sitter_kotlin::language(),
-        Elisp => tree_sitter_elisp::language(),
-        Elm => tree_sitter_elm::language(),
-        Dockerfile => tree_sitter_dockerfile::language(),
-        Html => tree_sitter_html::language(),
-        TreeSitterQuery => tree_sitter_query::language(),
-        Json => tree_sitter_json::language(),
-        Css => tree_sitter_css::language(),
-        Lua => tree_sitter_lua::language(),
+        Rust => tree_sitter_rust::language().into(),
+        Typescript => SingleLanguageOrLanguageFromPath::LanguageFromPath(Box::new(TypescriptLanguageFromPath)),
+        Javascript => tree_sitter_javascript::language().into(),
+        Swift => tree_sitter_swift::language().into(),
+        ObjectiveC => tree_sitter_objc::language().into(),
+        Toml => tree_sitter_toml::language().into(),
+        Python => tree_sitter_python::language().into(),
+        Ruby => tree_sitter_ruby::language().into(),
+        C => tree_sitter_c::language().into(),
+        Cpp => tree_sitter_cpp::language().into(),
+        Go => tree_sitter_go::language().into(),
+        Java => tree_sitter_java::language().into(),
+        CSharp => tree_sitter_c_sharp::language().into(),
+        Kotlin => tree_sitter_kotlin::language().into(),
+        Elisp => tree_sitter_elisp::language().into(),
+        Elm => tree_sitter_elm::language().into(),
+        Dockerfile => tree_sitter_dockerfile::language().into(),
+        Html => tree_sitter_html::language().into(),
+        TreeSitterQuery => tree_sitter_query::language().into(),
+        Json => tree_sitter_json::language().into(),
+        Css => tree_sitter_css::language().into(),
+        Lua => tree_sitter_lua::language().into(),
     )
 });
 
