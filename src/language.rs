@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
-    ops::{Deref, Index}, path::Path,
+    ops::{Deref, Index},
+    path::Path,
 };
 
 use once_cell::sync::Lazy;
@@ -46,7 +47,9 @@ impl SupportedLanguage {
     pub fn language(&self, path: Option<&Path>) -> Language {
         match &SUPPORTED_LANGUAGE_LANGUAGES[*self] {
             SingleLanguageOrLanguageFromPath::SingleLanguage(language) => *language,
-            SingleLanguageOrLanguageFromPath::LanguageFromPath(language_from_path) => language_from_path.from_path(path),
+            SingleLanguageOrLanguageFromPath::LanguageFromPath(language_from_path) => {
+                language_from_path.from_path(path)
+            }
         }
     }
 
@@ -86,32 +89,33 @@ impl LanguageFromPath for TypescriptLanguageFromPath {
     }
 }
 
-static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<SingleLanguageOrLanguageFromPath>> = Lazy::new(|| {
-    by_supported_language!(
-        Rust => tree_sitter_rust::language().into(),
-        Typescript => SingleLanguageOrLanguageFromPath::LanguageFromPath(Box::new(TypescriptLanguageFromPath)),
-        Javascript => tree_sitter_javascript::language().into(),
-        Swift => tree_sitter_swift::language().into(),
-        ObjectiveC => tree_sitter_objc::language().into(),
-        Toml => tree_sitter_toml::language().into(),
-        Python => tree_sitter_python::language().into(),
-        Ruby => tree_sitter_ruby::language().into(),
-        C => tree_sitter_c::language().into(),
-        Cpp => tree_sitter_cpp::language().into(),
-        Go => tree_sitter_go::language().into(),
-        Java => tree_sitter_java::language().into(),
-        CSharp => tree_sitter_c_sharp::language().into(),
-        Kotlin => tree_sitter_kotlin::language().into(),
-        Elisp => tree_sitter_elisp::language().into(),
-        Elm => tree_sitter_elm::language().into(),
-        Dockerfile => tree_sitter_dockerfile::language().into(),
-        Html => tree_sitter_html::language().into(),
-        TreeSitterQuery => tree_sitter_query::language().into(),
-        Json => tree_sitter_json::language().into(),
-        Css => tree_sitter_css::language().into(),
-        Lua => tree_sitter_lua::language().into(),
-    )
-});
+static SUPPORTED_LANGUAGE_LANGUAGES: Lazy<BySupportedLanguage<SingleLanguageOrLanguageFromPath>> =
+    Lazy::new(|| {
+        by_supported_language!(
+            Rust => tree_sitter_rust::language().into(),
+            Typescript => SingleLanguageOrLanguageFromPath::LanguageFromPath(Box::new(TypescriptLanguageFromPath)),
+            Javascript => tree_sitter_javascript::language().into(),
+            Swift => tree_sitter_swift::language().into(),
+            ObjectiveC => tree_sitter_objc::language().into(),
+            Toml => tree_sitter_toml::language().into(),
+            Python => tree_sitter_python::language().into(),
+            Ruby => tree_sitter_ruby::language().into(),
+            C => tree_sitter_c::language().into(),
+            Cpp => tree_sitter_cpp::language().into(),
+            Go => tree_sitter_go::language().into(),
+            Java => tree_sitter_java::language().into(),
+            CSharp => tree_sitter_c_sharp::language().into(),
+            Kotlin => tree_sitter_kotlin::language().into(),
+            Elisp => tree_sitter_elisp::language().into(),
+            Elm => tree_sitter_elm::language().into(),
+            Dockerfile => tree_sitter_dockerfile::language().into(),
+            Html => tree_sitter_html::language().into(),
+            TreeSitterQuery => tree_sitter_query::language().into(),
+            Json => tree_sitter_json::language().into(),
+            Css => tree_sitter_css::language().into(),
+            Lua => tree_sitter_lua::language().into(),
+        )
+    });
 
 static SUPPORTED_LANGUAGE_NAMES_FOR_IGNORE_SELECT: BySupportedLanguage<&'static str> = by_supported_language!(
     Rust => "rust",
@@ -179,3 +183,28 @@ static SUPPORTED_LANGUAGE_COMMENT_KINDS: Lazy<BySupportedLanguage<HashSet<&'stat
             Lua => ["comment"].into(),
         )
     });
+
+#[cfg(test)]
+mod tests {
+    use speculoos::prelude::*;
+
+    use super::*;
+
+    #[test]
+    fn test_supported_language_language_simple() {
+        assert_that!(&SupportedLanguage::Rust.language(Some("foo.rs".as_ref())))
+            .is_equal_to(tree_sitter_rust::language());
+        assert_that!(&SupportedLanguage::Rust.language(None))
+            .is_equal_to(tree_sitter_rust::language());
+    }
+
+    #[test]
+    fn test_supported_language_language_typescript() {
+        assert_that!(&SupportedLanguage::Typescript.language(Some("foo.tsx".as_ref())))
+            .is_equal_to(tree_sitter_typescript::language_tsx());
+        assert_that!(&SupportedLanguage::Typescript.language(Some("foo.ts".as_ref())))
+            .is_equal_to(tree_sitter_typescript::language_typescript());
+        assert_that!(&SupportedLanguage::Typescript.language(None))
+            .is_equal_to(tree_sitter_typescript::language_typescript());
+    }
+}
