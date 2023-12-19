@@ -997,7 +997,7 @@ fn test_couldnt_parse_more_than_two_candidate_auto_detected_languages() {
         "mixed_project",
         r#"
             $ tree-sitter-grep -q '(function_itemz) @f'
-            error: couldn't parse query for Javascript, Rust, or Typescript
+            error: couldn't parse query for Javascript, Rust, or Tsx
         "#,
     );
 }
@@ -1008,7 +1008,7 @@ fn test_couldnt_parse_two_candidate_auto_detected_languages() {
         "mixed_project",
         r#"
             $ tree-sitter-grep -q '(function_itemz) @f' javascript_src/ typescript_src/
-            error: couldn't parse query for Javascript or Typescript
+            error: couldn't parse query for Javascript or Tsx
         "#,
     );
 }

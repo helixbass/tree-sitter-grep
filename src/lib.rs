@@ -33,7 +33,7 @@ mod use_printer;
 mod use_searcher;
 
 pub use args::{Args, ArgsBuilder};
-use language::BySupportedLanguage;
+use language::{BySupportedLanguageLanguage, SupportedLanguageLanguage};
 pub use language::SupportedLanguage;
 pub use plugin::PluginInitializeReturn;
 use query_context::QueryContext;
@@ -75,7 +75,7 @@ pub enum Error {
             }
         }
     )]
-    NoSuccessfulQueryParsing(Vec<(SupportedLanguage, QueryError)>),
+    NoSuccessfulQueryParsing(Vec<(SupportedLanguageLanguage, QueryError)>),
     #[error("query must include at least one capture (\"@whatever\")")]
     NoCaptureInQuery,
     #[error("invalid capture name '{capture_name}'")]
@@ -172,7 +172,7 @@ impl From<CaptureIndexError> for QueryOrCaptureIndexError {
 #[allow(clippy::type_complexity)]
 #[derive(Default)]
 struct CachedQueries(
-    BySupportedLanguage<OnceLock<Result<(Arc<Query>, CaptureIndex), QueryOrCaptureIndexError>>>,
+    BySupportedLanguageLanguage<OnceLock<Result<(Arc<Query>, CaptureIndex), QueryOrCaptureIndexError>>>,
 );
 
 impl CachedQueries {
@@ -184,11 +184,12 @@ impl CachedQueries {
         path: Option<&Path>,
     ) -> Option<(Arc<Query>, CaptureIndex)> {
         let query_or_query_text = query_or_query_text.into();
-        self.0[language]
+        let supported_language_language = language.supported_language_language(path);
+        self.0[supported_language_language]
             .get_or_init(|| {
                 match query_or_query_text {
                     QueryOrQueryText::QueryText(query_text) => {
-                        maybe_get_query(query_text, language.language(path))
+                        maybe_get_query(query_text, supported_language_language.language())
                             .map(Arc::new)
                             .map_err(Into::into)
                     }

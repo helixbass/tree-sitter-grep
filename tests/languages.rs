@@ -438,3 +438,69 @@ fn test_lua_auto_language() {
         "#,
     );
 }
+
+#[test]
+fn test_typescript_tsx_specific_query() {
+    assert_sorted_output(
+        "typescript_project_with_tsx_and_ts",
+        r#"
+            $ tree-sitter-grep -q '(jsx_element) @c' --language typescript
+            foo.tsx:1:const a = <div>whee</div>;
+        "#,
+    );
+}
+
+#[test]
+fn test_typescript_tsx_specific_query_auto_language() {
+    assert_sorted_output(
+        "typescript_project_with_tsx_and_ts",
+        r#"
+            $ tree-sitter-grep -q '(jsx_element) @c'
+            foo.tsx:1:const a = <div>whee</div>;
+        "#,
+    );
+}
+
+#[test]
+fn test_typescript_only_should_match_ts_parsing() {
+    assert_sorted_output(
+        "typescript_project_with_tsx_and_ts",
+        r#"
+            $ tree-sitter-grep -q '(type_assertion) @c' --language typescript
+            hello.ts:1:const x = <div>3;
+        "#,
+    );
+}
+
+#[test]
+fn test_typescript_only_should_match_ts_parsing_auto_language() {
+    assert_sorted_output(
+        "typescript_project_with_tsx_and_ts",
+        r#"
+            $ tree-sitter-grep -q '(type_assertion) @c'
+            hello.ts:1:const x = <div>3;
+        "#,
+    );
+}
+
+#[test]
+fn test_typescript_invalid_query_for_ts_or_tsx() {
+    assert_failure_output(
+        "typescript_project_with_tsx_and_ts",
+        r#"
+            $ tree-sitter-grep -q '(foo) @c' --language typescript
+            error: couldn't parse query for Tsx or Typescript
+        "#,
+    );
+}
+
+#[test]
+fn test_typescript_invalid_query_for_ts_or_tsx_auto_language() {
+    assert_failure_output(
+        "typescript_project_with_tsx_and_ts",
+        r#"
+            $ tree-sitter-grep -q '(foo) @c'
+            error: couldn't parse query for Tsx or Typescript
+        "#,
+    );
+}

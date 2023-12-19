@@ -335,8 +335,8 @@ fn get_all_variants_collection_definition(
 ) -> proc_macro2::TokenStream {
     quote! {
         pub static #all_variants_collection_name: #collection_type_name<#name> = {
-            use SupportedLanguage::*;
-            BySupportedLanguage([
+            use #name::*;
+            #collection_type_name([
                 #(#variants),*
             ])
         };
