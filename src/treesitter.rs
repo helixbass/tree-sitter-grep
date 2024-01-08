@@ -146,6 +146,17 @@ impl<'a> From<&'a str> for RopeOrSlice<'a> {
     }
 }
 
+impl<'a> From<RopeOrSlice<'a>> for String {
+    fn from(value: RopeOrSlice<'a>) -> Self {
+        match value {
+            // TODO: should this use TryFrom instead to expose
+            // this fallibility?
+            RopeOrSlice::Slice(value) => std::str::from_utf8(value).unwrap().to_owned(),
+            RopeOrSlice::Rope(value) => value.into(),
+        }
+    }
+}
+
 pub enum RopeOrSliceTextProviderIterator<'a> {
     Slice(iter::Once<&'a [u8]>),
     Rope(RopeOrSliceRopeTextProviderIterator<'a>),
