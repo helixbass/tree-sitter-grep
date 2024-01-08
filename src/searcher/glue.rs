@@ -1,13 +1,14 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/glue.rs
 
-use tree_sitter::{Node, QueryCursor};
+use streaming_iterator::StreamingIterator;
 
 use crate::{
     lines::{self, LineStep},
     query_context::QueryContext,
     searcher::{core::Core, Config, Range, Searcher},
     sink::Sink,
-    treesitter::get_parser,
+    treesitter::get_captures,
+    CaptureInfo,
 };
 
 #[derive(Debug, Default)]
@@ -75,33 +76,17 @@ impl<'s, S: Sink> MultiLine<'s, S> {
     pub fn run(mut self) -> Result<(), S::Error> {
         if self.core.begin()? {
             let mut keepgoing = true;
-            let mut query_cursor = QueryCursor::new();
-            let tree = get_parser(self.core.query_context().language)
-                .parse(self.slice, None)
-                .unwrap();
-            let query = self.core.query_context().query.clone();
-            let capture_index = self.core.query_context().capture_index;
-            let filter = self.core.query_context().filter.clone();
-            let mut matches = query_cursor
-                .captures(&query, tree.root_node(), self.slice)
-                .filter_map(|(match_, found_capture_index)| {
-                    let found_capture_index = found_capture_index as u32;
-                    if found_capture_index != capture_index {
-                        return None;
-                    }
-                    let mut nodes_for_this_capture = match_.nodes_for_capture_index(capture_index);
-                    let single_captured_node = nodes_for_this_capture.next().unwrap();
-                    assert!(
-                        nodes_for_this_capture.next().is_none(),
-                        "I guess .captures() always wraps up the single capture like this?"
-                    );
-                    match filter.as_ref() {
-                        None => Some(single_captured_node),
-                        Some(filter) => filter
-                            .call(&single_captured_node)
-                            .then_some(single_captured_node),
-                    }
-                });
+            let query_context = self.core.query_context();
+            let query = query_context.query.clone();
+            let filter = query_context.filter.clone();
+            let mut matches = get_captures(
+                query_context.language,
+                self.slice,
+                &query,
+                query_context.capture_index,
+                filter.as_deref(),
+                None,
+            );
             while !self.slice[self.core.pos()..].is_empty() && keepgoing {
                 keepgoing = self.sink(&mut matches)?;
             }
@@ -132,7 +117,7 @@ impl<'s, S: Sink> MultiLine<'s, S> {
 
     fn sink<'tree>(
         &mut self,
-        matches: &mut impl Iterator<Item = Node<'tree>>,
+        matches: &mut impl StreamingIterator<Item = CaptureInfo<'tree>>,
     ) -> Result<bool, S::Error> {
         if self.config.invert_match {
             return self.sink_matched_inverted(matches);
@@ -173,7 +158,7 @@ impl<'s, S: Sink> MultiLine<'s, S> {
 
     fn sink_matched_inverted<'tree>(
         &mut self,
-        matches: &mut impl Iterator<Item = Node<'tree>>,
+        matches: &mut impl StreamingIterator<Item = CaptureInfo<'tree>>,
     ) -> Result<bool, S::Error> {
         assert!(self.config.invert_match);
 
@@ -241,9 +226,12 @@ impl<'s, S: Sink> MultiLine<'s, S> {
 
     fn find<'tree>(
         &mut self,
-        matches: &mut impl Iterator<Item = Node<'tree>>,
+        matches: &mut impl StreamingIterator<Item = CaptureInfo<'tree>>,
     ) -> Result<Option<Range>, S::Error> {
-        Ok(matches.next().as_ref().map(Into::into))
+        Ok(matches
+            .next()
+            .as_ref()
+            .map(|capture_info| (&capture_info.node).into()))
     }
 
     fn advance(&mut self, range: &Range) {

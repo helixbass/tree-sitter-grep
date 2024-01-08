@@ -1,8 +1,18 @@
-use tree_sitter::{Language, Node, Parser, Query, QueryError};
+#![allow(clippy::too_many_arguments)]
 
-use crate::matcher::Match;
+use std::{borrow::Cow, fmt, iter, mem};
 
-pub(crate) fn get_parser(language: Language) -> Parser {
+use ouroboros::self_referencing;
+use ropey::{iter::Chunks, Rope, RopeSlice};
+use streaming_iterator::StreamingIterator;
+use tree_sitter::{
+    Language, Node, Parser, Query, QueryCaptures, QueryCursor, QueryError, QueryMatch,
+    QueryMatches, TextProvider, Tree,
+};
+
+use crate::{matcher::Match, plugin::Filterer};
+
+pub fn get_parser(language: Language) -> Parser {
     let mut parser = Parser::new();
     parser
         .set_language(language)
@@ -19,5 +29,390 @@ impl From<&'_ Node<'_>> for Match {
         let range = node.range();
 
         Self::new(range.start_byte, range.end_byte)
+    }
+}
+
+pub trait Parseable {
+    fn parse(&self, parser: &mut Parser, old_tree: Option<&Tree>) -> Option<Tree>;
+}
+
+impl<'a> Parseable for &'a [u8] {
+    fn parse(&self, parser: &mut Parser, old_tree: Option<&Tree>) -> Option<Tree> {
+        parser.parse(self, old_tree)
+    }
+}
+
+impl<'a> Parseable for &'a Rope {
+    fn parse(&self, parser: &mut Parser, old_tree: Option<&Tree>) -> Option<Tree> {
+        parser.parse_with(
+            &mut |byte_offset, _| {
+                let (chunk, chunk_start_byte_index, _, _) = self.chunk_at_byte(byte_offset);
+                &chunk[byte_offset - chunk_start_byte_index..]
+            },
+            old_tree,
+        )
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum RopeOrSlice<'a> {
+    Slice(&'a [u8]),
+    Rope(&'a Rope),
+}
+
+impl<'a> TextProvider<&'a [u8]> for RopeOrSlice<'a> {
+    type I = RopeOrSliceTextProviderIterator<'a>;
+
+    fn text(&mut self, node: Node) -> Self::I {
+        match self {
+            Self::Slice(slice) => {
+                RopeOrSliceTextProviderIterator::Slice(iter::once(&slice[node.byte_range()]))
+            }
+            Self::Rope(rope) => {
+                let rope_slice = rope.byte_slice(node.byte_range());
+                RopeOrSliceTextProviderIterator::Rope(RopeOrSliceRopeTextProviderIterator::new(
+                    rope_slice,
+                    |rope_slice| rope_slice.chunks(),
+                ))
+            }
+        }
+    }
+}
+
+impl<'a> TextProvider<&'a [u8]> for &'a RopeOrSlice<'a> {
+    type I = RopeOrSliceTextProviderIterator<'a>;
+
+    fn text(&mut self, node: Node) -> Self::I {
+        match self {
+            RopeOrSlice::Slice(slice) => {
+                RopeOrSliceTextProviderIterator::Slice(iter::once(&slice[node.byte_range()]))
+            }
+            RopeOrSlice::Rope(rope) => {
+                let rope_slice = rope.byte_slice(node.byte_range());
+                RopeOrSliceTextProviderIterator::Rope(RopeOrSliceRopeTextProviderIterator::new(
+                    rope_slice,
+                    |rope_slice| rope_slice.chunks(),
+                ))
+            }
+        }
+    }
+}
+
+impl<'a> Parseable for RopeOrSlice<'a> {
+    fn parse(&self, parser: &mut Parser, old_tree: Option<&Tree>) -> Option<Tree> {
+        match self {
+            Self::Slice(slice) => slice.parse(parser, old_tree),
+            Self::Rope(rope) => rope.parse(parser, old_tree),
+        }
+    }
+}
+
+impl<'a> Parseable for &'a RopeOrSlice<'a> {
+    fn parse(&self, parser: &mut Parser, old_tree: Option<&Tree>) -> Option<Tree> {
+        match self {
+            RopeOrSlice::Slice(slice) => slice.parse(parser, old_tree),
+            RopeOrSlice::Rope(rope) => rope.parse(parser, old_tree),
+        }
+    }
+}
+
+impl<'a> fmt::Debug for RopeOrSlice<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Slice(arg0) => f
+                .debug_tuple("Slice")
+                .field(&std::str::from_utf8(arg0))
+                .finish(),
+            Self::Rope(arg0) => f.debug_tuple("Rope").field(arg0).finish(),
+        }
+    }
+}
+
+impl<'a> From<&'a [u8]> for RopeOrSlice<'a> {
+    fn from(value: &'a [u8]) -> Self {
+        Self::Slice(value)
+    }
+}
+
+impl<'a> From<&'a Rope> for RopeOrSlice<'a> {
+    fn from(value: &'a Rope) -> Self {
+        Self::Rope(value)
+    }
+}
+
+impl<'a> From<&'a str> for RopeOrSlice<'a> {
+    fn from(value: &'a str) -> Self {
+        Self::Slice(value.as_bytes())
+    }
+}
+
+impl<'a> From<RopeOrSlice<'a>> for String {
+    fn from(value: RopeOrSlice<'a>) -> Self {
+        match value {
+            // TODO: should this use TryFrom instead to expose
+            // this fallibility?
+            RopeOrSlice::Slice(value) => std::str::from_utf8(value).unwrap().to_owned(),
+            RopeOrSlice::Rope(value) => value.into(),
+        }
+    }
+}
+
+pub enum RopeOrSliceTextProviderIterator<'a> {
+    Slice(iter::Once<&'a [u8]>),
+    Rope(RopeOrSliceRopeTextProviderIterator<'a>),
+}
+
+impl<'a> Iterator for RopeOrSliceTextProviderIterator<'a> {
+    type Item = &'a [u8];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::Slice(slice_iterator) => slice_iterator.next(),
+            Self::Rope(rope_iterator) => rope_iterator.next().map(str::as_bytes),
+        }
+    }
+}
+
+#[self_referencing]
+pub struct RopeOrSliceRopeTextProviderIterator<'a> {
+    rope_slice: RopeSlice<'a>,
+
+    #[borrows(rope_slice)]
+    chunks_iterator: Chunks<'a>,
+}
+
+impl<'a> Iterator for RopeOrSliceRopeTextProviderIterator<'a> {
+    type Item = &'a str;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.with_chunks_iterator_mut(|chunks_iterator| chunks_iterator.next())
+    }
+}
+
+// I believe this type can't be Copy/Clone in order for the
+// `get_captures()` unsafe stuff to be sound
+pub struct CaptureInfo<'a> {
+    pub node: Node<'a>,
+    pub pattern_index: usize,
+}
+
+#[self_referencing]
+pub struct Captures<'a, 'text: 'a, 'tree: 'a> {
+    text: RopeOrSlice<'text>,
+    query_cursor: QueryCursor,
+    query: &'a Query,
+    filter: Option<&'a Filterer>,
+    tree: Cow<'tree, Tree>,
+    capture_index: u32,
+    #[borrows(text, mut query_cursor, query, tree)]
+    #[covariant]
+    captures_iterator: QueryCaptures<'this, 'this, RopeOrSlice<'this>, &'this [u8]>,
+    #[borrows(tree)]
+    #[covariant]
+    next_capture: Option<CaptureInfo<'this>>,
+}
+
+pub fn get_captures<'a, 'text, 'tree>(
+    language: Language,
+    // text: impl TextProvider<'a> + Parseable,
+    text: impl Into<RopeOrSlice<'text>>,
+    query: &'a Query,
+    capture_index: u32,
+    filter: Option<&'a Filterer>,
+    tree: Option<&'tree Tree>,
+) -> Captures<'a, 'text, 'tree> {
+    let text = text.into();
+    let query_cursor = QueryCursor::new();
+    let tree: Cow<'tree, Tree> = tree.map_or_else(
+        || Cow::Owned(text.parse(&mut get_parser(language), None).unwrap()),
+        Cow::Borrowed,
+    );
+    Captures::new(
+        text,
+        query_cursor,
+        query,
+        filter,
+        tree,
+        capture_index,
+        |text, query_cursor, query, tree| query_cursor.captures(query, tree.root_node(), *text),
+        |_| None,
+    )
+}
+
+impl<'a, 'text, 'tree> StreamingIterator for Captures<'a, 'text, 'tree> {
+    type Item = CaptureInfo<'tree>;
+
+    fn advance(&mut self) {
+        self.with_mut(|all_fields| {
+            for (match_, index_into_query_match_captures) in all_fields.captures_iterator.by_ref() {
+                let this_capture = &match_.captures[index_into_query_match_captures];
+                if this_capture.index != *all_fields.capture_index {
+                    continue;
+                }
+                let single_captured_node = this_capture.node;
+                if all_fields
+                    .filter
+                    .as_ref()
+                    .map_or(true, |filter| filter.call(&single_captured_node))
+                {
+                    *all_fields.next_capture = Some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    });
+                    return;
+                }
+            }
+            *all_fields.next_capture = None;
+        });
+    }
+
+    fn get<'this>(&'this self) -> Option<&'this Self::Item> {
+        let next_capture = self.borrow_next_capture();
+        // SAFETY: I think this is ok as long as CaptureInfo isn't
+        // Copy/Clone?
+        // Since at that point there's no way for the "inner"
+        // CaptureInfo's contents to "outlive" the returned reference?
+        // Did this because otherwise was running into not being able
+        // to express that the "real" Item type for this trait (I think)
+        // should be CaptureInfo<'this>, not CaptureInfo<'a>
+        let next_capture: &'this Option<CaptureInfo<'tree>> =
+            unsafe { mem::transmute(next_capture) };
+        next_capture.as_ref()
+    }
+}
+
+#[self_referencing]
+pub struct CapturesForEnclosingNode<'a, 'text: 'a, 'tree: 'a> {
+    text: RopeOrSlice<'text>,
+    query_cursor: QueryCursor,
+    query: &'a Query,
+    filter: Option<&'a Filterer>,
+    enclosing_node: Node<'tree>,
+    capture_index: u32,
+    #[borrows(text, mut query_cursor, query, enclosing_node)]
+    #[covariant]
+    captures_iterator: QueryCaptures<'this, 'this, RopeOrSlice<'this>, &'this [u8]>,
+    #[borrows(enclosing_node)]
+    #[covariant]
+    next_capture: Option<CaptureInfo<'this>>,
+}
+
+pub fn get_captures_for_enclosing_node<'a, 'text, 'tree>(
+    // text: impl TextProvider<'a> + Parseable,
+    text: impl Into<RopeOrSlice<'text>>,
+    query: &'a Query,
+    capture_index: u32,
+    filter: Option<&'a Filterer>,
+    enclosing_node: Node<'tree>,
+) -> CapturesForEnclosingNode<'a, 'text, 'tree> {
+    let text = text.into();
+    let query_cursor = QueryCursor::new();
+    CapturesForEnclosingNode::new(
+        text,
+        query_cursor,
+        query,
+        filter,
+        enclosing_node,
+        capture_index,
+        |text, query_cursor, query, enclosing_node| {
+            query_cursor.captures(query, *enclosing_node, *text)
+        },
+        |_| None,
+    )
+}
+
+impl<'a, 'text, 'tree> StreamingIterator for CapturesForEnclosingNode<'a, 'text, 'tree> {
+    type Item = CaptureInfo<'tree>;
+
+    fn advance(&mut self) {
+        self.with_mut(|all_fields| {
+            for (match_, index_into_query_match_captures) in all_fields.captures_iterator.by_ref() {
+                let this_capture = &match_.captures[index_into_query_match_captures];
+                if this_capture.index != *all_fields.capture_index {
+                    continue;
+                }
+                let single_captured_node = this_capture.node;
+                if all_fields
+                    .filter
+                    .as_ref()
+                    .map_or(true, |filter| filter.call(&single_captured_node))
+                {
+                    *all_fields.next_capture = Some(CaptureInfo {
+                        node: single_captured_node,
+                        pattern_index: match_.pattern_index,
+                    });
+                    return;
+                }
+            }
+            *all_fields.next_capture = None;
+        });
+    }
+
+    fn get<'this>(&'this self) -> Option<&'this Self::Item> {
+        let next_capture = self.borrow_next_capture();
+        // SAFETY: I think this is ok as long as CaptureInfo isn't
+        // Copy/Clone?
+        // Since at that point there's no way for the "inner"
+        // CaptureInfo's contents to "outlive" the returned reference?
+        // Did this because otherwise was running into not being able
+        // to express that the "real" Item type for this trait (I think)
+        // should be CaptureInfo<'this>, not CaptureInfo<'a>
+        let next_capture: &'this Option<CaptureInfo<'tree>> =
+            unsafe { mem::transmute(next_capture) };
+        next_capture.as_ref()
+    }
+}
+
+#[self_referencing]
+pub struct Matches<'a, 'text: 'a, 'tree: 'a> {
+    text: RopeOrSlice<'text>,
+    query_cursor: QueryCursor,
+    query: &'a Query,
+    tree: Cow<'tree, Tree>,
+    #[borrows(text, mut query_cursor, query, tree)]
+    #[covariant]
+    matches_iterator: QueryMatches<'this, 'this, RopeOrSlice<'this>, &'this [u8]>,
+    #[borrows(tree)]
+    #[covariant]
+    next_match: Option<QueryMatch<'this, 'this>>,
+}
+
+pub fn get_matches<'a, 'text, 'tree>(
+    language: Language,
+    text: impl Into<RopeOrSlice<'text>>,
+    query: &'a Query,
+    tree: Option<&'tree Tree>,
+) -> Matches<'a, 'text, 'tree> {
+    let text = text.into();
+    let query_cursor = QueryCursor::new();
+    let tree: Cow<'tree, Tree> = tree.map_or_else(
+        || Cow::Owned(text.parse(&mut get_parser(language), None).unwrap()),
+        Cow::Borrowed,
+    );
+    Matches::new(
+        text,
+        query_cursor,
+        query,
+        tree,
+        |text, query_cursor, query, tree| query_cursor.matches(query, tree.root_node(), *text),
+        |_| None,
+    )
+}
+
+impl<'a, 'text, 'tree> StreamingIterator for Matches<'a, 'text, 'tree> {
+    type Item = QueryMatch<'a, 'tree>;
+
+    fn advance(&mut self) {
+        self.with_mut(|all_fields| {
+            *all_fields.next_match = all_fields.matches_iterator.next();
+        });
+    }
+
+    fn get<'this>(&'this self) -> Option<&'this Self::Item> {
+        let next_match = self.borrow_next_match();
+        // SAFETY: Not as sure on this one?
+        let next_match: &'this Option<QueryMatch<'a, 'tree>> =
+            unsafe { mem::transmute(next_match) };
+        next_match.as_ref()
     }
 }

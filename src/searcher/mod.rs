@@ -1,24 +1,28 @@
 // derived from https://github.com/BurntSushi/ripgrep/blob/master/crates/searcher/src/searcher/mod.rs
 
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     cmp, fmt,
     fs::File,
     io::{self, Read},
+    ops,
     path::Path,
 };
 
 use encoding_rs_io::DecodeReaderBytesBuilder;
-use tree_sitter::{Node, QueryCursor};
+use memmap::Mmap;
+use streaming_iterator::StreamingIterator;
+use tree_sitter::{QueryMatch, Tree};
 
 pub use self::mmap::MmapChoice;
 use crate::{
+    get_matches,
     line_buffer::{alloc_error, DEFAULT_BUFFER_CAPACITY},
     matcher::{LineTerminator, Match},
     query_context::QueryContext,
     searcher::glue::MultiLine,
     sink::{Sink, SinkError},
-    treesitter::get_parser,
+    RopeOrSlice,
 };
 
 mod core;
@@ -214,11 +218,30 @@ impl Searcher {
         self.search_file_maybe_path(query_context, Some(path), &file, write_to)
     }
 
+    pub fn load_file_contents<P, TError: SinkError>(
+        &mut self,
+        path: P,
+    ) -> Result<MmapOrRefByteVec, TError>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        let file = File::open(path).map_err(TError::error_io)?;
+
+        if let Some(mmap) = self.config.mmap.open(&file, Some(path)) {
+            return Ok(mmap.into());
+        }
+
+        self.fill_multi_line_buffer_from_file(&file)
+            .map_err(TError::error_io)?;
+        return Ok(self.multi_line_buffer.borrow().into());
+    }
+
     pub fn search_path_callback<P, TError: SinkError>(
         &mut self,
         query_context: QueryContext,
         path: P,
-        callback: impl Fn(Node, &[u8], &Path),
+        callback: impl FnMut(&QueryMatch, &[u8], &Path),
     ) -> Result<(), TError>
     where
         P: AsRef<Path>,
@@ -338,7 +361,7 @@ impl Searcher {
         &mut self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(Node, &[u8], &Path),
+        callback: impl FnMut(&QueryMatch, &[u8], &Path),
         path: &Path,
     ) -> Result<(), ConfigError> {
         self.check_config()?;
@@ -349,43 +372,36 @@ impl Searcher {
         Ok(())
     }
 
+    pub fn search_slice_callback_no_path<'a, 'text, 'tree>(
+        &mut self,
+        query_context: QueryContext,
+        // slice: impl TextProvider<'a> + Parseable + 'a,
+        slice: impl Into<RopeOrSlice<'text>>,
+        tree: Option<&'tree Tree>,
+        mut callback: impl FnMut(&QueryMatch),
+    ) -> Result<(), ConfigError> {
+        self.check_config()?;
+
+        log::trace!("slice reader: searching via multiline strategy");
+        get_matches(query_context.language, slice, &query_context.query, tree).for_each(
+            |query_match| {
+                callback(query_match);
+            },
+        );
+
+        Ok(())
+    }
+
     fn run_with_callback(
         &self,
         query_context: QueryContext,
         slice: &[u8],
-        callback: impl Fn(Node, &[u8], &Path),
+        mut callback: impl FnMut(&QueryMatch, &[u8], &Path),
         path: &Path,
     ) {
-        let mut query_cursor = QueryCursor::new();
-        let tree = get_parser(query_context.language)
-            .parse(slice, None)
-            .unwrap();
-        let query = &query_context.query;
-        let capture_index = query_context.capture_index;
-        let filter = &query_context.filter;
-        query_cursor
-            .captures(query, tree.root_node(), slice)
-            .filter_map(|(match_, found_capture_index)| {
-                let found_capture_index = found_capture_index as u32;
-                if found_capture_index != capture_index {
-                    return None;
-                }
-                let mut nodes_for_this_capture = match_.nodes_for_capture_index(capture_index);
-                let single_captured_node = nodes_for_this_capture.next().unwrap();
-                assert!(
-                    nodes_for_this_capture.next().is_none(),
-                    "I guess .captures() always wraps up the single capture like this?"
-                );
-                match filter.as_ref() {
-                    None => Some(single_captured_node),
-                    Some(filter) => filter
-                        .call(&single_captured_node)
-                        .then_some(single_captured_node),
-                }
-            })
-            .for_each(|node| {
-                callback(node, slice, path);
-            });
+        get_matches(query_context.language, slice, &query_context.query, None).for_each(|match_| {
+            callback(match_, slice, path);
+        });
     }
 
     fn check_config(&self) -> Result<(), ConfigError> {
@@ -488,6 +504,34 @@ impl Searcher {
                 let doubled = 2 * buf.len();
                 buf.resize(cmp::min(doubled, limit), 0);
             }
+        }
+    }
+}
+
+pub enum MmapOrRefByteVec<'a> {
+    Mmap(Mmap),
+    RefByteVec(Ref<'a, Vec<u8>>),
+}
+
+impl<'a> From<Mmap> for MmapOrRefByteVec<'a> {
+    fn from(value: Mmap) -> Self {
+        Self::Mmap(value)
+    }
+}
+
+impl<'a> From<Ref<'a, Vec<u8>>> for MmapOrRefByteVec<'a> {
+    fn from(value: Ref<'a, Vec<u8>>) -> Self {
+        Self::RefByteVec(value)
+    }
+}
+
+impl<'a> ops::Deref for MmapOrRefByteVec<'a> {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Mmap(value) => value,
+            Self::RefByteVec(value) => value,
         }
     }
 }

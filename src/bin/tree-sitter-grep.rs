@@ -1,7 +1,7 @@
 use std::process;
 
 use clap::Parser;
-use tree_sitter_grep::{run_print, Args, RunStatus};
+use tree_sitter_lint_tree_sitter_grep::{run_print, Args, RunStatus};
 
 pub fn main() {
     let args = Args::parse();

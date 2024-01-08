@@ -1,22 +1,16 @@
-use std::{
-    cell::{OnceCell, RefCell},
-    ptr,
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{searcher::Searcher, Args};
 
 thread_local! {
-    static SEARCHER: OnceCell<(Rc<RefCell<Searcher>>, *const Args)> = Default::default();
+    static SEARCHER_PER_ARGS_INSTANCE: RefCell<HashMap<*const Args, Rc<RefCell<Searcher>>>> = Default::default();
 }
 pub(crate) fn get_searcher(args: &Args) -> Rc<RefCell<Searcher>> {
-    SEARCHER.with(|searcher| {
-        let (searcher, args_when_initialized) =
-            searcher.get_or_init(|| (Rc::new(RefCell::new(args.get_searcher())), args));
-        assert!(
-            ptr::eq(*args_when_initialized, args),
-            "Using multiple instances of args not supported"
-        );
-        searcher.clone()
+    SEARCHER_PER_ARGS_INSTANCE.with(|searcher_per_args_instance| {
+        searcher_per_args_instance
+            .borrow_mut()
+            .entry(args)
+            .or_insert_with(|| Rc::new(RefCell::new(args.get_searcher())))
+            .clone()
     })
 }
