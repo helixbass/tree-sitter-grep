@@ -15,8 +15,14 @@ thread_local! {
 }
 pub(crate) fn get_printer(buffer_writer: &BufferWriter, args: &Args) -> Rc<RefCell<Printer>> {
     PRINTER.with(|printer| {
-        let (printer, args_when_initialized) =
-            printer.get_or_init(|| (Rc::new(RefCell::new(args.get_printer(buffer_writer))), args));
+        let (printer, args_when_initialized) = printer.get_or_init(|| {
+            (
+                Rc::new(RefCell::new(
+                    args.get_printer(&args.use_paths(), buffer_writer),
+                )),
+                args,
+            )
+        });
         assert!(
             ptr::eq(*args_when_initialized, args),
             "Using multiple instances of args not supported"

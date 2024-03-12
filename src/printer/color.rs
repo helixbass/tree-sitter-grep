@@ -4,16 +4,15 @@ use std::{error, fmt, str::FromStr};
 
 use termcolor::{Color, ColorSpec, ParseColorError};
 
-#[allow(dead_code)]
 pub fn default_color_specs() -> Vec<UserColorSpec> {
     vec![
-        #[cfg(unix)]
-        "path:fg:magenta".parse().unwrap(),
-        #[cfg(windows)]
-        "path:fg:cyan".parse().unwrap(),
-        "line:fg:green".parse().unwrap(),
-        "match:fg:red".parse().unwrap(),
-        "match:style:bold".parse().unwrap(),
+        "path:fg:green".parse().unwrap(),
+        "path:style:bold".parse().unwrap(),
+        "line:fg:yellow".parse().unwrap(),
+        "line:style:bold".parse().unwrap(),
+        "match:fg:black".parse().unwrap(),
+        "match:bg:yellow".parse().unwrap(),
+        "match:style:nobold".parse().unwrap(),
     ]
 }
 

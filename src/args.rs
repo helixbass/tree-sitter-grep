@@ -3,14 +3,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use clap::{ArgGroup, Parser};
+use clap::{ArgGroup, Parser, ValueEnum};
 use ignore::{types::Types, WalkBuilder, WalkParallel};
 use rayon::iter::IterBridge;
-use termcolor::BufferWriter;
+use termcolor::{BufferWriter, ColorChoice};
 
 use crate::{
     language::SupportedLanguage,
-    printer::StandardBuilder,
+    printer::{default_color_specs, ColorSpecs, StandardBuilder, UserColorSpec},
     project_file_walker::{
         get_project_file_walker_types, into_parallel_iterator, WalkParallelIterator,
     },
@@ -18,6 +18,18 @@ use crate::{
     use_printer::Printer,
     NonFatalError,
 };
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+pub enum ColorChoiceArg {
+    /// Colors will never be used.
+    Never,
+    /// The default. tree-sitter-grep tries to be smart.
+    Auto,
+    /// Colors will always be used regardless of where output is sent.
+    Always,
+    /// Like 'always', but emits ANSI escapes (even in a Windows console).
+    Ansi,
+}
 
 #[derive(Parser)]
 #[clap(group(
@@ -107,10 +119,137 @@ pub struct Args {
     /// the offset of the matching part itself.
     #[arg(short = 'b', long)]
     pub byte_offset: bool,
+
+    /// This flag specifies color settings for use in the output.
+    ///
+    /// This flag may be provided multiple times. Settings are applied
+    /// iteratively. Colors are limited to one of eight choices: red, blue,
+    /// green, cyan, magenta, yellow, white and black. Styles are limited to
+    /// nobold, bold, nointense, intense, nounderline or underline.
+    ///
+    /// The format of the flag is '{type}:{attribute}:{value}'. '{type}' should
+    /// be one of path, line, column or match. '{attribute}' can be fg, bg
+    /// or style. '{value}' is either a color (for fg and bg) or a text
+    /// style. A special format, '{type}:none', will clear all color
+    /// settings for '{type}'.
+    ///
+    /// For example, the following command will change the match color to
+    /// magenta and the background color for line numbers to yellow:
+    ///
+    /// tree-sitter-grep --colors 'match:fg:magenta' --colors 'line:bg:yellow'
+    /// -q '(function_item) @f'
+    ///
+    /// Extended colors can be used for '{value}' when the terminal supports
+    /// ANSI color sequences. These are specified as either 'x' (256-color)
+    /// or 'x,x,x' (24-bit truecolor) where x is a number between 0 and 255
+    /// inclusive. x may be given as a normal decimal number or a
+    /// hexadecimal number, which is prefixed by `0x`.
+    ///
+    /// For example, the following command will change the match background
+    /// color to that represented by the rgb value (0,128,255):
+    ///
+    /// tree-sitter-grep --colors 'match:bg:0,128,255'
+    ///
+    /// or, equivalently,
+    ///
+    /// tree-sitter-grep --colors 'match:bg:0x0,0x80,0xFF'
+    ///
+    /// Note that the intense and nointense style flags will have no effect when
+    /// used alongside these extended color codes.
+    #[arg(long)]
+    pub colors: Vec<UserColorSpec>,
+
+    /// This flag controls when to use colors.
+    ///
+    /// The default setting is 'auto', which means tree-sitter-grep will try to
+    /// guess when to use colors. For example, if tree-sitter-grep is printing
+    /// to a terminal, then it will use colors, but if it is redirected to a
+    /// file or a pipe, then it will suppress color output. tree-sitter-grep
+    /// will suppress color output in some other circumstances as well. For
+    /// example, if the TERM environment variable is not set or set to 'dumb',
+    /// then tree-sitter-grep will not use colors.
+    ///
+    /// When the --vimgrep flag is given to tree-sitter-grep, then the default
+    /// value for the --color flag changes to 'never'.
+    #[arg(long, value_name = "WHEN")]
+    pub color: Option<ColorChoiceArg>,
+
+    /// This is a convenience alias for '--color always --heading
+    /// --line-number'.
+    ///
+    /// This flag is useful when you still want pretty output even if you're
+    /// piping tree-sitter-grep to another program or file. For example:
+    /// 'tree-sitter-grep -p -q "(function_item) @c" | less -R'.
+    #[arg(short = 'p', long)]
+    pub pretty: bool,
+
+    /// This flag prints the file path above clusters of matches from each file
+    /// instead of printing the file path as a prefix for each matched line.
+    ///
+    /// This is the default mode when printing to a terminal.
+    ///
+    /// This overrides the --no-heading flag.
+    #[arg(long)]
+    pub heading: bool,
+
+    /// Don't group matches by each file.
+    ///
+    /// If --no-heading is provided in addition to the -H/--with-filename flag,
+    /// then file paths will be printed as a prefix for every matched line.
+    /// This is the default mode when not printing to a terminal.
+    ///
+    /// This overrides the --heading flag.
+    #[arg(long, overrides_with = "heading")]
+    pub no_heading: bool,
+
+    /// Display the file path for matches.
+    ///
+    /// This is the default when more than one file is searched. If --heading is
+    /// enabled (the default when printing to a terminal), the file path will be
+    /// shown above clusters of matches from each file; otherwise, the file name
+    /// will be shown as a prefix for each matched line.
+    ///
+    /// This flag overrides --no-filename.
+    #[arg(short = 'H', long)]
+    pub with_filename: bool,
+
+    /// Never print the file path with the matched lines.
+    ///
+    /// This is the default when tree-sitter-grep is explicitly instructed to
+    /// search one file or stdin.
+    ///
+    /// This flag overrides --with-filename.
+    #[arg(short = 'I', long, overrides_with = "with_filename")]
+    pub no_filename: bool,
+
+    /// Show line numbers (1-based).
+    ///
+    /// This is enabled by default when searching in a terminal.
+    #[arg(short = 'n', long)]
+    pub line_number: bool,
+
+    /// Suppress line numbers.
+    ///
+    /// This is enabled by default when not searching in a terminal.
+    #[arg(short = 'N', long, overrides_with = "line_number")]
+    pub no_line_number: bool,
+
+    /// Show column numbers (1-based).
+    ///
+    /// This only shows the column numbers for the first match on each line.
+    /// This does not try to account for Unicode. One byte is equal to one
+    /// column. This implies --line-number.
+    ///
+    /// This flag can be disabled with --no-column.
+    #[arg(long)]
+    pub column: bool,
+
+    #[arg(long, hide = true, overrides_with = "column")]
+    pub no_column: bool,
 }
 
 impl Args {
-    fn use_paths(&self) -> Vec<PathBuf> {
+    pub fn use_paths(&self) -> Vec<PathBuf> {
         if self.paths.is_empty() {
             vec![Path::new("./").to_owned()]
         } else {
@@ -122,8 +261,26 @@ impl Args {
         self.paths.is_empty()
     }
 
-    fn line_number(&self) -> bool {
-        true
+    fn is_only_stdin(&self, paths: &[PathBuf]) -> bool {
+        paths == [Path::new("-")]
+    }
+
+    fn line_number(&self, paths: &[PathBuf]) -> bool {
+        // if self.output_kind() == OutputKind::Summary {
+        //     return false;
+        // }
+        if self.no_line_number {
+            return false;
+        }
+        // if self.output_kind() == OutputKind::JSON {
+        //     return true;
+        // }
+
+        (grep_cli::is_tty_stdout() && !self.is_only_stdin(paths))
+            || self.line_number
+            || self.column
+            || self.pretty
+            || self.vimgrep
     }
 
     fn per_match(&self) -> bool {
@@ -135,7 +292,10 @@ impl Args {
     }
 
     fn column(&self) -> bool {
-        self.vimgrep
+        if self.no_column {
+            return false;
+        }
+        self.column || self.vimgrep
     }
 
     fn contexts(&self) -> (usize, usize) {
@@ -150,22 +310,27 @@ impl Args {
         }
     }
 
-    pub(crate) fn get_searcher(&self) -> Searcher {
+    pub(crate) fn get_searcher(&self, paths: &[PathBuf]) -> Searcher {
         let (before_context, after_context) = self.contexts();
         SearcherBuilder::new()
-            .line_number(self.line_number())
+            .line_number(self.line_number(paths))
             .before_context(before_context)
             .after_context(after_context)
             .build()
     }
 
-    pub(crate) fn get_printer(&self, buffer_writer: &BufferWriter) -> Printer {
+    pub(crate) fn get_printer(&self, paths: &[PathBuf], buffer_writer: &BufferWriter) -> Printer {
         StandardBuilder::new()
+            .color_specs(self.color_specs())
+            .heading(self.heading())
+            .path(self.with_filename(paths))
             .per_match(self.per_match())
             .per_match_one_line(self.per_match_one_line())
             .column(self.column())
             .only_matching(self.only_matching)
             .byte_offset(self.byte_offset)
+            .separator_context(self.context_separator())
+            .separator_search(None)
             .build(buffer_writer.buffer())
     }
 
@@ -189,5 +354,79 @@ impl Args {
         non_fatal_errors: Arc<Mutex<Vec<NonFatalError>>>,
     ) -> IterBridge<WalkParallelIterator> {
         into_parallel_iterator(self.get_project_file_walker(), non_fatal_errors)
+    }
+
+    pub fn color_specs(&self) -> ColorSpecs {
+        let mut specs = default_color_specs();
+        for user_color_spec in &self.colors {
+            specs.push(user_color_spec.clone());
+        }
+        ColorSpecs::new(&specs)
+    }
+
+    pub fn buffer_writer(&self) -> BufferWriter {
+        let mut wtr = BufferWriter::stdout(self.color_choice());
+        wtr.separator(self.file_separator());
+        wtr
+    }
+
+    fn color_choice(&self) -> ColorChoice {
+        match self.color.unwrap_or(if self.vimgrep {
+            ColorChoiceArg::Never
+        } else {
+            ColorChoiceArg::Auto
+        }) {
+            ColorChoiceArg::Always => ColorChoice::Always,
+            ColorChoiceArg::Ansi => ColorChoice::AlwaysAnsi,
+            ColorChoiceArg::Auto => {
+                if grep_cli::is_tty_stdout() || self.pretty {
+                    ColorChoice::Auto
+                } else {
+                    ColorChoice::Never
+                }
+            }
+            ColorChoiceArg::Never => ColorChoice::Never,
+        }
+    }
+
+    fn heading(&self) -> bool {
+        if self.no_heading || self.vimgrep {
+            false
+        } else {
+            grep_cli::is_tty_stdout() || self.heading || self.pretty
+        }
+    }
+
+    fn file_separator(&self) -> Option<Vec<u8>> {
+        // if self.output_kind() != OutputKind::Standard {
+        //     return Ok(None);
+        // }
+
+        let (ctx_before, ctx_after) = self.contexts();
+        if self.heading() {
+            Some(b"".to_vec())
+        } else if ctx_before > 0 || ctx_after > 0 {
+            self.context_separator()
+        } else {
+            None
+        }
+    }
+
+    fn context_separator(&self) -> Option<Vec<u8>> {
+        Some(b"--".to_vec())
+    }
+
+    fn with_filename(&self, paths: &[PathBuf]) -> bool {
+        if self.no_filename {
+            false
+        } else {
+            let path_stdin = Path::new("-");
+            self.with_filename
+                || self.vimgrep
+                || paths.len() > 1
+                || paths
+                    .get(0)
+                    .map_or(false, |p| p != path_stdin && p.is_dir())
+        }
     }
 }

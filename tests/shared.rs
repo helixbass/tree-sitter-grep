@@ -4,6 +4,7 @@ use std::{borrow::Cow, env, path::PathBuf, process::Command};
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
 use regex::Captures;
+use text_diff::print_diff;
 
 #[macro_export]
 macro_rules! regex {
@@ -141,11 +142,11 @@ fn massage_windows_line(line: &str) -> String {
 }
 
 fn strip_trailing_carriage_return(line: &str) -> Cow<'_, str> {
-    regex!(r#"\r$"#).replace(line, "")
+    regex!(r#"\r((?:\u{1b}\[\d+m)*)$"#).replace(line, "$1")
 }
 
 fn normalize_match_path(line: &str) -> Cow<'_, str> {
-    regex!(r#"^[^:]+[:-]\d+[:-]"#)
+    regex!(r#"^(?:\u{1b}\[\d+m)*[a-zA-Z_\-\\/]+\.(?:rs|js|tsx)"#)
         .replace(line, |captures: &Captures| captures[0].replace('\\', "/"))
 }
 
@@ -193,6 +194,9 @@ pub fn assert_non_match_output(fixture_dir_name: &str, command_and_output: &str)
         .success()
         .stdout(predicate::function(|stdout: &str| {
             let stdout = massage_error_output(stdout);
+            if stdout != output {
+                print_diff(&stdout, &output, " ");
+            }
             stdout == output
         }));
 }

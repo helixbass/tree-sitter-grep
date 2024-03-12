@@ -27,6 +27,7 @@ bytecount = "0.6"
 clap = { version = "4.3.0", features = ["derive", "wrap_help"] }
 encoding_rs = "0.8.14"
 encoding_rs_io = "0.1.6"
+grep-cli = "0.1.8"
 ignore = { package = "tree_sitter_grep_ignore", git = "https://github.com/helixbass/ripgrep", rev = "669ebd3", version = "0.4.20-dev.0" }
 libc = "0.2.144"
 libloading = "0.8.0"
@@ -73,6 +74,7 @@ assert_cmd = "2.0.11"
 escargot = "0.5.7"
 predicates = "3.0.3"
 shlex = "1.1.0"
+text-diff = "0.4.0"
 
 [features]
 default = ["bytecount/runtime-dispatch-simd"]
